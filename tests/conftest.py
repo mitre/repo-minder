@@ -1,12 +1,25 @@
 """Pytest configuration and fixtures."""
 
 import pytest
+import sys
 from pathlib import Path
+
+# Add parent to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from standardize_licenses import HAS_JINJA2
 
 @pytest.fixture
 def template_dir():
     """Return path to templates directory."""
     return Path(__file__).parent.parent / "templates"
+
+@pytest.fixture
+def jinja_env(template_dir):
+    """Create Jinja2 environment."""
+    if not HAS_JINJA2:
+        pytest.skip("Jinja2 not installed")
+    from jinja2 import Environment, FileSystemLoader
+    return Environment(loader=FileSystemLoader(template_dir))
 
 @pytest.fixture
 def cis_template(template_dir):
