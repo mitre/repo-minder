@@ -1,6 +1,5 @@
 """Unit tests for LICENSE template content and structure."""
 
-import pytest
 
 
 class TestTemplateStructure:
@@ -33,9 +32,14 @@ class TestTemplateStructure:
     def test_all_templates_have_mitre_copyright(self, cis_template, disa_template, plain_template):
         """All templates must contain MITRE copyright."""
         for template in [cis_template, disa_template, plain_template]:
-            assert "© 2025 The MITRE Corporation" in template or "Copyright © 2025 The MITRE Corporation" in template
+            assert (
+                "© 2025 The MITRE Corporation" in template
+                or "Copyright © 2025 The MITRE Corporation" in template
+            )
 
-    def test_all_templates_have_government_notice(self, cis_template, disa_template, plain_template):
+    def test_all_templates_have_government_notice(
+        self, cis_template, disa_template, plain_template
+    ):
         """All templates must contain government contract notice."""
         for template in [cis_template, disa_template, plain_template]:
             assert "U.S. Government" in template
@@ -43,9 +47,17 @@ class TestTemplateStructure:
 
     def test_all_templates_80_char_width(self, cis_template, disa_template, plain_template):
         """All templates should respect 80-character line width."""
-        for name, template in [("CIS", cis_template), ("DISA", disa_template), ("Plain", plain_template)]:
+        for name, template in [
+            ("CIS", cis_template),
+            ("DISA", disa_template),
+            ("Plain", plain_template),
+        ]:
             lines = template.split("\n")
-            long_lines = [i+1 for i, line in enumerate(lines) if len(line) > 80 and not line.strip().startswith("http")]
+            long_lines = [
+                i + 1
+                for i, line in enumerate(lines)
+                if len(line) > 80 and not line.strip().startswith("http")
+            ]
             assert len(long_lines) == 0, f"{name} template has lines > 80 chars at: {long_lines}"
 
     def test_cis_template_structure(self, cis_template):

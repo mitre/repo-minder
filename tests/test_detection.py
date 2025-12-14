@@ -1,8 +1,9 @@
 """Unit tests for license template detection logic."""
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add parent dir to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -112,8 +113,7 @@ class TestLicenseCorrection:
         """Test that SAF tools with CIS license get corrected to plain."""
         content_with_cis = "CIS Benchmarks. Please visit www.cisecurity.org"
         template = standardizer.detect_template_type(
-            content=content_with_cis,
-            repo_name="saf-baseline-ingestion"
+            content=content_with_cis, repo_name="saf-baseline-ingestion"
         )
         assert template == "plain", "SAF tool with CIS content should be corrected to plain"
 
@@ -121,25 +121,24 @@ class TestLicenseCorrection:
         """Test that SAF tools with DISA license get corrected to plain."""
         content_with_disa = "DISA STIGs. Please visit https://public.cyber.mil/stigs/"
         template = standardizer.detect_template_type(
-            content=content_with_disa,
-            repo_name="saf-training-lab-environment"
+            content=content_with_disa, repo_name="saf-training-lab-environment"
         )
-        assert template == "plain", "SAF training env with DISA content should be corrected to plain"
+        assert (
+            template == "plain"
+        ), "SAF training env with DISA content should be corrected to plain"
 
     def test_actual_baseline_keeps_correct_license(self, standardizer):
         """Test that actual baselines keep their correct licenses."""
         # CIS baseline with CIS content stays CIS
         cis_content = "CIS Benchmarks. Please visit www.cisecurity.org"
         template = standardizer.detect_template_type(
-            content=cis_content,
-            repo_name="aws-foundations-cis-baseline"
+            content=cis_content, repo_name="aws-foundations-cis-baseline"
         )
         assert template == "cis", "Real CIS baseline should stay CIS"
 
         # DISA baseline with DISA content stays DISA
         disa_content = "DISA STIGs. Please visit https://public.cyber.mil/stigs/"
         template = standardizer.detect_template_type(
-            content=disa_content,
-            repo_name="redhat-enterprise-linux-7-stig-baseline"
+            content=disa_content, repo_name="redhat-enterprise-linux-7-stig-baseline"
         )
         assert template == "disa", "Real DISA baseline should stay DISA"

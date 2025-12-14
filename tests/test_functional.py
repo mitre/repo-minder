@@ -1,14 +1,12 @@
 """Functional tests for end-to-end license standardization."""
 
-import json
-import subprocess
+# Import after ensuring parent dir in path
+import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
-# Import after ensuring parent dir in path
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from standardize_licenses import LicenseStandardizer
 
@@ -16,7 +14,7 @@ from standardize_licenses import LicenseStandardizer
 @pytest.fixture
 def mock_gh_api():
     """Mock gh api calls."""
-    with patch('subprocess.run') as mock_run:
+    with patch("subprocess.run") as mock_run:
         yield mock_run
 
 
@@ -27,8 +25,7 @@ class TestLicenseStandardizerFunctional:
         """Test that forked repos are skipped."""
         # Mock get_repo_metadata to return fork=true
         mock_gh_api.return_value = Mock(
-            returncode=0,
-            stdout='{"fork": true, "archived": false, "default_branch": "main"}'
+            returncode=0, stdout='{"fork": true, "archived": false, "default_branch": "main"}'
         )
 
         standardizer = LicenseStandardizer(dry_run=True)
@@ -42,8 +39,7 @@ class TestLicenseStandardizerFunctional:
         """Test that archived repos are skipped when --skip-archived."""
         # Mock get_repo_metadata to return archived=true
         mock_gh_api.return_value = Mock(
-            returncode=0,
-            stdout='{"fork": false, "archived": true, "default_branch": "main"}'
+            returncode=0, stdout='{"fork": false, "archived": true, "default_branch": "main"}'
         )
 
         standardizer = LicenseStandardizer(dry_run=True, skip_archived=True)
@@ -59,7 +55,9 @@ class TestLicenseStandardizerFunctional:
         # Second call: check LICENSE file (exists)
         # Third call: get content
         mock_gh_api.side_effect = [
-            Mock(returncode=0, stdout='{"fork": false, "archived": true, "default_branch": "main"}'),
+            Mock(
+                returncode=0, stdout='{"fork": false, "archived": true, "default_branch": "main"}'
+            ),
             Mock(returncode=0, stdout='{"sha": "abc123", "content": "base64content"}'),
             Mock(returncode=0, stdout='"TGljZW5zZSBjb250ZW50"'),  # "License content" in base64
         ]
@@ -73,7 +71,9 @@ class TestLicenseStandardizerFunctional:
         """Test that --skip cis skips CIS repos."""
         # Mock metadata, license check, and content
         mock_gh_api.side_effect = [
-            Mock(returncode=0, stdout='{"fork": false, "archived": false, "default_branch": "main"}'),
+            Mock(
+                returncode=0, stdout='{"fork": false, "archived": false, "default_branch": "main"}'
+            ),
             Mock(returncode=0, stdout='{"sha": "abc123", "content": "base64"}'),
             Mock(returncode=0, stdout='"Q0lTIEJlbmNobWFya3M="'),  # "CIS Benchmarks" in base64
         ]
@@ -88,7 +88,9 @@ class TestLicenseStandardizerFunctional:
         """Test that LICENSE.md is created for repos without license."""
         # Mock metadata and no license file
         mock_gh_api.side_effect = [
-            Mock(returncode=0, stdout='{"fork": false, "archived": false, "default_branch": "main"}'),
+            Mock(
+                returncode=0, stdout='{"fork": false, "archived": false, "default_branch": "main"}'
+            ),
             Mock(returncode=1),  # LICENSE.md doesn't exist
             Mock(returncode=1),  # LICENSE doesn't exist
         ]
@@ -105,12 +107,17 @@ class TestLicenseStandardizerFunctional:
         """Test that LICENSE is renamed to LICENSE.md."""
         # Mock: metadata, no LICENSE.md, has LICENSE, get content
         import base64
+
         content = base64.b64encode(b"Licensed under Apache 2.0").decode()
 
         mock_gh_api.side_effect = [
-            Mock(returncode=0, stdout='{"fork": false, "archived": false, "default_branch": "main"}'),
+            Mock(
+                returncode=0, stdout='{"fork": false, "archived": false, "default_branch": "main"}'
+            ),
             Mock(returncode=1),  # No LICENSE.md
-            Mock(returncode=0, stdout=f'{{"sha": "abc123", "content": "{content}"}}'),  # Has LICENSE
+            Mock(
+                returncode=0, stdout=f'{{"sha": "abc123", "content": "{content}"}}'
+            ),  # Has LICENSE
             Mock(returncode=0, stdout=f'"{content}"'),  # Get content
         ]
 
@@ -124,11 +131,16 @@ class TestLicenseStandardizerFunctional:
     def test_updates_existing_license_md(self, mock_gh_api):
         """Test that existing LICENSE.md is updated with cleaned format."""
         import base64
+
         content = base64.b64encode(b"Licensed under Apache 2.0").decode()
 
         mock_gh_api.side_effect = [
-            Mock(returncode=0, stdout='{"fork": false, "archived": false, "default_branch": "main"}'),
-            Mock(returncode=0, stdout=f'{{"sha": "abc123", "content": "{content}"}}'),  # Has LICENSE.md
+            Mock(
+                returncode=0, stdout='{"fork": false, "archived": false, "default_branch": "main"}'
+            ),
+            Mock(
+                returncode=0, stdout=f'{{"sha": "abc123", "content": "{content}"}}'
+            ),  # Has LICENSE.md
             Mock(returncode=0, stdout=f'"{content}"'),  # Get content
         ]
 
@@ -160,13 +172,25 @@ class TestEdgeCases:
 
         standardizer = LicenseStandardizer(dry_run=True)
         standardizer.results = [
-            {"repo": "saf", "status": "success", "action": "renamed", "template": "plain", "error": None},
-            {"repo": "heimdall2", "status": "success", "action": "updated", "template": "plain", "error": None},
+            {
+                "repo": "saf",
+                "status": "success",
+                "action": "renamed",
+                "template": "plain",
+                "error": None,
+            },
+            {
+                "repo": "heimdall2",
+                "status": "success",
+                "action": "updated",
+                "template": "plain",
+                "error": None,
+            },
         ]
         standardizer.stats["total"] = 2
         standardizer.stats["renamed"] = 1
         standardizer.stats["updated"] = 1
-        standardizer.save_dry_run_plan(format="txt")
+        standardizer.save_dry_run_plan(output_format="txt")
 
         plan_file = tmp_path / "dry_run_plan.txt"
         assert plan_file.exists()

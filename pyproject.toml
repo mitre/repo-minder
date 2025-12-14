@@ -54,8 +54,11 @@ line-length = 100
 target-version = "py37"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "T20"]
-ignore = ["E501"]  # Line too long (handled by formatter)
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4"]
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+    "T201",  # Print statements (expected in CLI tool)
+]
 
 [tool.black]
 line-length = 100

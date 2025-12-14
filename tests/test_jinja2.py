@@ -1,8 +1,9 @@
 """Tests for Jinja2 template rendering."""
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from standardize_licenses import HAS_JINJA2, JINJA_TEMPLATE, TEMPLATE_VARS
@@ -13,7 +14,6 @@ pytestmark = pytest.mark.skipif(not HAS_JINJA2, reason="Jinja2 not installed")
 
 class TestJinja2Templates:
     """Test Jinja2 template rendering."""
-
 
     def test_jinja_template_exists(self):
         """Test that LICENSE.j2 template exists."""
@@ -27,7 +27,10 @@ class TestJinja2Templates:
         assert "CIS Benchmarks" in rendered
         assert "www.cisecurity.org" in rendered
         assert "## Third-Party Content" in rendered
-        assert f"© {TEMPLATE_VARS['year']}" in rendered or f"Copyright © {TEMPLATE_VARS['year']}" in rendered
+        assert (
+            f"© {TEMPLATE_VARS['year']}" in rendered
+            or f"Copyright © {TEMPLATE_VARS['year']}" in rendered
+        )
 
     def test_renders_disa_template(self, jinja_env):
         """Test rendering DISA template with Jinja2."""
@@ -65,10 +68,13 @@ class TestJinja2Templates:
             rendered = template.render(template_type=template_type, **TEMPLATE_VARS)
             lines = rendered.split("\n")
             long_lines = [
-                i+1 for i, line in enumerate(lines)
+                i + 1
+                for i, line in enumerate(lines)
                 if len(line) > 80 and not line.strip().startswith("http")
             ]
-            assert len(long_lines) == 0, f"{template_type} template has lines > 80 chars at: {long_lines}"
+            assert (
+                len(long_lines) == 0
+            ), f"{template_type} template has lines > 80 chars at: {long_lines}"
 
 
 class TestTemplateEquivalence:

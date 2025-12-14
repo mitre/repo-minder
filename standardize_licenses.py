@@ -29,6 +29,7 @@ from typing import Dict, List, Optional, Tuple
 
 try:
     from jinja2 import Environment, FileSystemLoader, select_autoescape
+
     HAS_JINJA2 = True
 except ImportError:
     HAS_JINJA2 = False
@@ -74,8 +75,7 @@ class LicenseStandardizer:
         # Load templates (prefer Jinja2 if available)
         if HAS_JINJA2 and JINJA_TEMPLATE.exists():
             env = Environment(
-                loader=FileSystemLoader(TEMPLATES_DIR),
-                autoescape=select_autoescape()
+                loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape()
             )
             jinja_template = env.get_template("LICENSE.j2")
             self.templates = {
@@ -202,7 +202,11 @@ class LicenseStandardizer:
             has_disa_content = "DISA STIGs" in content or "DISA IASE" in content
 
             # If LICENSE claims CIS/DISA but repo is a tool → Fix to plain
-            if (has_cis_content or has_disa_content) and not self.is_cis_baseline_repo(repo_name) and not self.is_disa_baseline_repo(repo_name):
+            if (
+                (has_cis_content or has_disa_content)
+                and not self.is_cis_baseline_repo(repo_name)
+                and not self.is_disa_baseline_repo(repo_name)
+            ):
                 return "plain"  # Fix incorrect LICENSE
 
         return "plain"
@@ -210,8 +214,13 @@ class LicenseStandardizer:
     def get_repo_metadata(self, repo_name: str) -> Dict:
         """Get repo metadata (fork status, archived status, default branch)."""
         result = subprocess.run(
-            ["gh", "api", f"repos/mitre/{repo_name}", "--jq",
-             '{"fork": .fork, "archived": .archived, "default_branch": .default_branch}'],
+            [
+                "gh",
+                "api",
+                f"repos/mitre/{repo_name}",
+                "--jq",
+                '{"fork": .fork, "archived": .archived, "default_branch": .default_branch}',
+            ],
             capture_output=True,
             text=True,
             check=True,
@@ -240,12 +249,17 @@ class LicenseStandardizer:
             f.write(template)
 
         cmd = [
-            "gh", "api",
+            "gh",
+            "api",
             f"repos/mitre/{repo_name}/contents/LICENSE.md",
-            "-X", "PUT",
-            "-F", f"message=docs: add LICENSE.md [skip ci]",
-            "-F", f"content=@temp_license.md",
-            "-F", f"branch={branch}",
+            "-X",
+            "PUT",
+            "-F",
+            "message=docs: add LICENSE.md [skip ci]",
+            "-F",
+            "content=@temp_license.md",
+            "-F",
+            f"branch={branch}",
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -253,12 +267,16 @@ class LicenseStandardizer:
 
         return result.returncode == 0
 
-    def update_license(self, repo_name: str, template_type: str, old_file: str, sha: str, branch: str):
+    def update_license(
+        self, repo_name: str, template_type: str, old_file: str, sha: str, branch: str
+    ):
         """Update or create LICENSE.md file."""
         template = self.templates[template_type]
 
         if self.dry_run:
-            print(f"  [DRY RUN] Would update {old_file} → LICENSE.md using {template_type} template")
+            print(
+                f"  [DRY RUN] Would update {old_file} → LICENSE.md using {template_type} template"
+            )
             return True
 
         # Create/update LICENSE.md
@@ -268,23 +286,34 @@ class LicenseStandardizer:
         if old_file == "LICENSE.md":
             # Update existing LICENSE.md
             cmd = [
-                "gh", "api",
+                "gh",
+                "api",
                 f"repos/mitre/{repo_name}/contents/LICENSE.md",
-                "-X", "PUT",
-                "-F", f"message=docs: clean up LICENSE.md formatting [skip ci]",
-                "-F", f"content=@temp_license.md",
-                "-F", f"sha={sha}",
-                "-F", f"branch={branch}",
+                "-X",
+                "PUT",
+                "-F",
+                "message=docs: clean up LICENSE.md formatting [skip ci]",
+                "-F",
+                "content=@temp_license.md",
+                "-F",
+                f"sha={sha}",
+                "-F",
+                f"branch={branch}",
             ]
         else:
             # Create new LICENSE.md
             cmd = [
-                "gh", "api",
+                "gh",
+                "api",
                 f"repos/mitre/{repo_name}/contents/LICENSE.md",
-                "-X", "PUT",
-                "-F", f"message=docs: add LICENSE.md [skip ci]",
-                "-F", f"content=@temp_license.md",
-                "-F", f"branch={branch}",
+                "-X",
+                "PUT",
+                "-F",
+                "message=docs: add LICENSE.md [skip ci]",
+                "-F",
+                "content=@temp_license.md",
+                "-F",
+                f"branch={branch}",
             ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -303,7 +332,7 @@ class LicenseStandardizer:
     def delete_old_license(self, repo_name: str, branch: str):
         """Delete old LICENSE file (no .md extension)."""
         if self.dry_run:
-            print(f"  [DRY RUN] Would delete old LICENSE file")
+            print("  [DRY RUN] Would delete old LICENSE file")
             return
 
         # Get current SHA of LICENSE file
@@ -318,12 +347,17 @@ class LicenseStandardizer:
         sha = result.stdout.strip().strip('"')
         subprocess.run(
             [
-                "gh", "api",
+                "gh",
+                "api",
                 f"repos/mitre/{repo_name}/contents/LICENSE",
-                "-X", "DELETE",
-                "-F", f"message=docs: rename LICENSE to LICENSE.md [skip ci]",
-                "-F", f"sha={sha}",
-                "-F", f"branch={branch}",
+                "-X",
+                "DELETE",
+                "-F",
+                "message=docs: rename LICENSE to LICENSE.md [skip ci]",
+                "-F",
+                f"sha={sha}",
+                "-F",
+                f"branch={branch}",
             ],
             capture_output=True,
         )
@@ -442,18 +476,19 @@ class LicenseStandardizer:
         else:
             print(f"✅ All {self.stats['verified']} repos have LICENSE.md")
 
-    def save_dry_run_plan(self, format="txt"):
+    def save_dry_run_plan(self, output_format="txt", output_file=None):
         """Save dry-run plan to file for review.
 
         Args:
-            format: Output format ('txt', 'json', 'csv')
+            output_format: Output format ('txt', 'json', 'csv')
+            output_file: Custom output filename (default: dry_run_plan.{format})
         """
         if not self.dry_run or not self.results:
             return
 
         # Text format
-        if format == "txt":
-            plan_file = Path("dry_run_plan.txt")
+        if output_format == "txt":
+            plan_file = Path(output_file) if output_file else Path("dry_run_plan.txt")
             with open(plan_file, "w") as f:
                 f.write("DRY RUN PLAN - Review before executing\n")
                 f.write("=" * 70 + "\n\n")
@@ -482,9 +517,10 @@ class LicenseStandardizer:
             print(f"\n📝 Dry-run plan saved to: {plan_file}")
 
         # JSON format
-        elif format == "json":
+        elif output_format == "json":
             import json as json_lib
-            plan_file = Path("dry_run_plan.json")
+
+            plan_file = Path(output_file) if output_file else Path("dry_run_plan.json")
             output = {
                 "summary": self.stats,
                 "results": self.results,
@@ -494,11 +530,14 @@ class LicenseStandardizer:
             print(f"\n📝 Dry-run plan saved to: {plan_file}")
 
         # CSV format
-        elif format == "csv":
+        elif output_format == "csv":
             import csv
-            plan_file = Path("dry_run_plan.csv")
+
+            plan_file = Path(output_file) if output_file else Path("dry_run_plan.csv")
             with open(plan_file, "w", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=["repo", "status", "action", "template", "error"])
+                writer = csv.DictWriter(
+                    f, fieldnames=["repo", "status", "action", "template", "error"]
+                )
                 writer.writeheader()
                 writer.writerows(self.results)
             print(f"\n📝 Dry-run plan saved to: {plan_file}")
@@ -513,21 +552,26 @@ class LicenseStandardizer:
         print(f"Created:          {self.stats['created']}")
         print(f"Renamed:          {self.stats['renamed']}")
         print(f"Skipped:          {self.stats['skipped']}")
-        if self.stats['forks'] > 0:
+        if self.stats["forks"] > 0:
             print(f"  - Forks:        {self.stats['forks']}")
-        if self.stats['archived'] > 0:
+        if self.stats["archived"] > 0:
             print(f"  - Archived:     {self.stats['archived']}")
         print(f"Failed:           {self.stats['failed']}")
-        if self.stats['verified'] > 0:
+        if self.stats["verified"] > 0:
             print(f"Verified:         {self.stats['verified']}")
 
-        if self.stats['failed'] > 0:
+        if self.stats["failed"] > 0:
             print("\nFailed repos:")
             for r in self.results:
-                if r['status'] == 'failed':
+                if r["status"] == "failed":
                     print(f"  - {r['repo']}: {r.get('error', 'unknown error')}")
 
-    def run(self, repo_filter: Optional[str] = None, pattern: Optional[str] = None, resume_from: Optional[str] = None):
+    def run(
+        self,
+        repo_filter: Optional[str] = None,
+        pattern: Optional[str] = None,
+        resume_from: Optional[str] = None,
+    ):
         """Run standardization on all repos."""
         # Get repos
         repos = self.get_saf_repos()
@@ -538,6 +582,7 @@ class LicenseStandardizer:
 
         if pattern:
             import fnmatch
+
             repos = [r for r in repos if fnmatch.fnmatch(r, pattern)]
             print(f"Filtered to {len(repos)} repos matching pattern '{pattern}'\n")
 
@@ -577,7 +622,10 @@ class LicenseStandardizer:
 
         # Save dry-run plan (will be set from args in main())
         if self.dry_run:
-            self.save_dry_run_plan(format=getattr(self, 'output_format', 'txt'))
+            self.save_dry_run_plan(
+                output_format=getattr(self, "output_format", "txt"),
+                output_file=getattr(self, "output_file", None),
+            )
 
         # Print summary
         self.print_summary()
@@ -586,14 +634,12 @@ class LicenseStandardizer:
         if not self.dry_run:
             self.verify_all(repos)
 
-        return 0 if self.stats['failed'] == 0 else 1
+        return 0 if self.stats["failed"] == 0 else 1
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Standardize LICENSE files in MITRE SAF repos"
-    )
+    parser = argparse.ArgumentParser(description="Standardize LICENSE files in MITRE SAF repos")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -643,6 +689,11 @@ def main():
         default="txt",
         help="Dry-run output format (default: txt)",
     )
+    parser.add_argument(
+        "-o",
+        "--output",
+        help="Output file for dry-run plan (default: dry_run_plan.{format})",
+    )
 
     args = parser.parse_args()
 
@@ -657,9 +708,10 @@ def main():
         dry_run=args.dry_run or args.verify_only,
         skip_templates=args.skip or [],
         skip_archived=args.skip_archived,
-        delay=args.delay
+        delay=args.delay,
     )
     standardizer.output_format = args.output_format  # For dry-run reporting
+    standardizer.output_file = args.output  # For custom output filename
 
     # Single repo test mode
     if args.repo:
@@ -678,15 +730,14 @@ def main():
             repos = [r for r in repos if args.repo_filter.lower() in r.lower()]
         if args.pattern:
             import fnmatch
+
             repos = [r for r in repos if fnmatch.fnmatch(r, args.pattern)]
         standardizer.stats["total"] = len(repos)
         standardizer.verify_all(repos)
         return 0
 
     return standardizer.run(
-        repo_filter=args.repo_filter,
-        pattern=args.pattern,
-        resume_from=args.resume_from
+        repo_filter=args.repo_filter, pattern=args.pattern, resume_from=args.resume_from
     )
 
 
