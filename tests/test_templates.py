@@ -1,7 +1,6 @@
 """Unit tests for LICENSE template content and structure."""
 
 
-
 class TestTemplateStructure:
     """Test that templates have correct structure and content."""
 
