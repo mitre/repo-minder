@@ -21,7 +21,6 @@ Usage:
 
 import json
 import subprocess
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -253,7 +252,9 @@ class LicenseStandardizer:
         template = self.templates[template_type]
 
         if self.dry_run:
-            console.print(f"  [yellow][DRY RUN] Would create LICENSE.md using {template_type} template[/yellow]")
+            console.print(
+                f"  [yellow][DRY RUN] Would create LICENSE.md using {template_type} template[/yellow]"
+            )
             return True
 
         with open("temp_license.md", "w") as f:
@@ -574,7 +575,11 @@ class LicenseStandardizer:
             table.add_row("  - Forks", str(self.stats["forks"]))
         if self.stats["archived"] > 0:
             table.add_row("  - Archived", str(self.stats["archived"]))
-        table.add_row("Failed", str(self.stats["failed"]), style="red" if self.stats["failed"] > 0 else "green")
+        table.add_row(
+            "Failed",
+            str(self.stats["failed"]),
+            style="red" if self.stats["failed"] > 0 else "green",
+        )
         if self.stats["verified"] > 0:
             table.add_row("Verified", str(self.stats["verified"]))
 
@@ -607,14 +612,18 @@ class LicenseStandardizer:
             import fnmatch
 
             repos = [r for r in repos if fnmatch.fnmatch(r, pattern)]
-            console.print(f"[cyan]Filtered to {len(repos)} repos matching pattern '{pattern}'[/cyan]\n")
+            console.print(
+                f"[cyan]Filtered to {len(repos)} repos matching pattern '{pattern}'[/cyan]\n"
+            )
 
         # Resume from specific repo
         if resume_from:
             try:
                 start_index = repos.index(resume_from)
                 repos = repos[start_index:]
-                console.print(f"[cyan]Resuming from '{resume_from}' ({len(repos)} repos remaining)[/cyan]\n")
+                console.print(
+                    f"[cyan]Resuming from '{resume_from}' ({len(repos)} repos remaining)[/cyan]\n"
+                )
             except ValueError:
                 console.print(f"[red]❌ Resume repo '{resume_from}' not found in list[/red]")
                 return 1
@@ -658,7 +667,9 @@ class LicenseStandardizer:
                 if result["status"] == "success":
                     console.print(f"  ✅ {result['action']} ({result['template']})")
                     if self.dry_run:
-                        self.dry_run_plan.append(f"{repo}: {result['action']} ({result['template']})")
+                        self.dry_run_plan.append(
+                            f"{repo}: {result['action']} ({result['template']})"
+                        )
                 elif result["status"] == "skipped":
                     console.print(f"  ⏭️  {result['action']}")
                 else:
@@ -726,16 +737,20 @@ class LicenseStandardizer:
             return
 
         # Check 1: All same template type (suspicious)
-        template_types = set(r.get("template") for r in self.results if r.get("template"))
+        template_types = {r.get("template") for r in self.results if r.get("template")}
         if len(template_types) == 1 and total_processed > 5:
-            warnings.append(f"⚠️  All {total_processed} repos detected as same template type ({list(template_types)[0].upper()})")
+            warnings.append(
+                f"⚠️  All {total_processed} repos detected as same template type ({list(template_types)[0].upper()})"
+            )
 
         # Check 2: Too many creates (>50%)
         creates = self.stats.get("created", 0)
         if creates > 0 and total_processed > 5:
             create_pct = (creates / total_processed) * 100
             if create_pct > 50:
-                warnings.append(f"⚠️  {create_pct:.0f}% of repos need LICENSE created (expected <50%)")
+                warnings.append(
+                    f"⚠️  {create_pct:.0f}% of repos need LICENSE created (expected <50%)"
+                )
 
         # Check 3: Too many forks (>30%)
         forks = self.stats.get("forks", 0)
@@ -743,7 +758,9 @@ class LicenseStandardizer:
         if forks > 0 and total_checked > 10:
             fork_pct = (forks / total_checked) * 100
             if fork_pct > 30:
-                warnings.append(f"⚠️  {fork_pct:.0f}% of repos are forks (might have selected wrong team)")
+                warnings.append(
+                    f"⚠️  {fork_pct:.0f}% of repos are forks (might have selected wrong team)"
+                )
 
         if warnings:
             console.print("\n[yellow bold]⚠️  SANITY CHECK WARNINGS:[/yellow bold]")
@@ -754,7 +771,9 @@ class LicenseStandardizer:
 @app.command()
 def standardize(
     repo: Annotated[Optional[str], typer.Option(help="Process single repo (test mode)")] = None,
-    pattern: Annotated[Optional[str], typer.Option(help="Glob pattern (e.g., '*-stig-baseline')")] = None,
+    pattern: Annotated[
+        Optional[str], typer.Option(help="Glob pattern (e.g., '*-stig-baseline')")
+    ] = None,
     skip: Annotated[Optional[List[str]], typer.Option(help="Skip template types")] = None,
     skip_archived: Annotated[bool, typer.Option(help="Skip archived repositories")] = False,
     resume_from: Annotated[Optional[str], typer.Option(help="Resume from specific repo")] = None,
@@ -764,16 +783,24 @@ def standardize(
     repo_filter: Annotated[Optional[str], typer.Option(help="Filter repos by substring")] = None,
     output_format: Annotated[str, typer.Option(help="Dry-run output format")] = "txt",
     output: Annotated[Optional[str], typer.Option("-o", help="Custom output filename")] = None,
-    interactive: Annotated[bool, typer.Option("--interactive", "-i", help="Interactive mode with prompts")] = False,
-    no_interactive: Annotated[bool, typer.Option("--no-interactive", help="Disable interactive prompts (for CI)")] = False,
+    interactive: Annotated[
+        bool, typer.Option("--interactive", "-i", help="Interactive mode with prompts")
+    ] = False,
+    no_interactive: Annotated[
+        bool, typer.Option("--no-interactive", help="Disable interactive prompts (for CI)")
+    ] = False,
     force: Annotated[bool, typer.Option("--force", help="Skip confirmation prompts")] = False,
-    backup: Annotated[bool, typer.Option("--backup", help="Backup original LICENSE files before update")] = True,
+    backup: Annotated[
+        bool, typer.Option("--backup", help="Backup original LICENSE files before update")
+    ] = True,
 ):
     """Standardize LICENSE files in MITRE SAF repositories."""
     # Layer 1: Command Validation - Must specify target
     if not (repo or pattern or repo_filter or verify_only or interactive):
         console.print("[red]❌ No target specified![/red]")
-        console.print("Use one of: --repo, --pattern, --repo-filter, --verify-only, or --interactive")
+        console.print(
+            "Use one of: --repo, --pattern, --repo-filter, --verify-only, or --interactive"
+        )
         console.print("Run with --help for usage information")
         raise typer.Exit(1)
     # Interactive mode (only if not explicitly disabled)
@@ -857,6 +884,7 @@ def standardize(
             repos = [r for r in repos if repo_filter.lower() in r.lower()]
         if pattern:
             import fnmatch
+
             repos = [r for r in repos if fnmatch.fnmatch(r, pattern)]
         standardizer.stats["total"] = len(repos)
         standardizer.verify_all(repos)

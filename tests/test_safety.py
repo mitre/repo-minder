@@ -3,7 +3,6 @@
 import sys
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -51,9 +50,17 @@ class TestBulkConfirmation:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=[f"repo-{i}" for i in range(50)],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", return_value=("LICENSE", "abc"))
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache")
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file",
+            return_value=("LICENSE", "abc"),
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache"
+        )
 
         # Mock questionary.confirm to return False (cancel)
         mock_confirm = mocker.patch("questionary.confirm")
@@ -71,13 +78,21 @@ class TestBulkConfirmation:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=[f"repo-{i}" for i in range(50)],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", return_value=("LICENSE", "abc"))
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache")
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file",
+            return_value=("LICENSE", "abc"),
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache"
+        )
 
         mock_confirm = mocker.patch("questionary.confirm")
 
-        result = runner.invoke(app, ["--pattern", "*", "--force", "--dry-run"])
+        runner.invoke(app, ["--pattern", "*", "--force", "--dry-run"])
 
         # Should NOT have prompted
         mock_confirm.assert_not_called()
@@ -88,13 +103,21 @@ class TestBulkConfirmation:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=[f"repo-{i}" for i in range(5)],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", return_value=("LICENSE", "abc"))
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache")
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file",
+            return_value=("LICENSE", "abc"),
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache"
+        )
 
         mock_confirm = mocker.patch("questionary.confirm")
 
-        result = runner.invoke(app, ["--pattern", "*", "--dry-run"])
+        runner.invoke(app, ["--pattern", "*", "--dry-run"])
 
         # Should NOT prompt (small batch)
         mock_confirm.assert_not_called()
@@ -107,7 +130,7 @@ class TestBulkConfirmation:
         )
         mock_confirm = mocker.patch("questionary.confirm")
 
-        result = runner.invoke(app, ["--pattern", "*", "--dry-run"])
+        runner.invoke(app, ["--pattern", "*", "--dry-run"])
 
         # Dry-run should skip confirmation
         mock_confirm.assert_not_called()
@@ -129,12 +152,21 @@ class TestBackupSystem:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=["saf"],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", return_value=("LICENSE.md", "abc"))
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value="Old license content")
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file",
+            return_value=("LICENSE.md", "abc"),
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content",
+            return_value="Old license content",
+        )
         mocker.patch("standardize_licenses.LicenseStandardizer.update_license", return_value=True)
 
-        result = runner.invoke(app, ["--pattern", "saf", "--force"])
+        runner.invoke(app, ["--pattern", "saf", "--force"])
 
         # Should create backups/ directory
         assert (tmp_path / "backups").exists()
@@ -147,12 +179,21 @@ class TestBackupSystem:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=["saf"],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", return_value=("LICENSE.md", "abc"))
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value="Old content")
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file",
+            return_value=("LICENSE.md", "abc"),
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content",
+            return_value="Old content",
+        )
         mocker.patch("standardize_licenses.LicenseStandardizer.update_license", return_value=True)
 
-        result = runner.invoke(app, ["--pattern", "saf", "--force", "--no-backup"])
+        runner.invoke(app, ["--pattern", "saf", "--force", "--no-backup"])
 
         # Should NOT create backups/
         assert not (tmp_path / "backups").exists()
@@ -166,16 +207,25 @@ class TestBackupSystem:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=["test-repo"],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", return_value=("LICENSE.md", "abc"))
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value=original_content)
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file",
+            return_value=("LICENSE.md", "abc"),
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content",
+            return_value=original_content,
+        )
 
         # Mock update to succeed (but don't mock it so backup code runs)
         # Actually, we need to mock subprocess calls
         mock_run = mocker.patch("subprocess.run")
         mock_run.return_value.returncode = 0
 
-        result = runner.invoke(app, ["--repo", "test-repo", "--force", "--dry-run"])
+        runner.invoke(app, ["--repo", "test-repo", "--force", "--dry-run"])
 
         # In dry-run, backup shouldn't be created
         # Change test to non-dry-run scenario
@@ -194,14 +244,25 @@ class TestDryRunAnalysis:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=["aws-cis-baseline", "rhel-stig-baseline", "saf", "heimdall2"],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", return_value=("LICENSE", "abc"))
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache 2.0")
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file",
+            return_value=("LICENSE", "abc"),
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content",
+            return_value="Apache 2.0",
+        )
 
         result = runner.invoke(app, ["--pattern", "*", "--dry-run"])
 
         # Should show "Template Distribution" or similar analysis
-        assert "Template" in result.output or "Distribution" in result.output or result.exit_code == 0
+        assert (
+            "Template" in result.output or "Distribution" in result.output or result.exit_code == 0
+        )
 
     def test_template_distribution_shows_counts(self, mocker):
         """Template distribution should show count for each type."""
@@ -209,9 +270,18 @@ class TestDryRunAnalysis:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=["aws-cis-baseline", "docker-cis-baseline", "rhel-stig-baseline", "saf"],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", return_value=("LICENSE", "abc"))
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache 2.0")
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file",
+            return_value=("LICENSE", "abc"),
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content",
+            return_value="Apache 2.0",
+        )
 
         result = runner.invoke(app, ["--pattern", "*", "--dry-run"])
 
@@ -229,11 +299,23 @@ class TestSanityChecks:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=["aws-cis-baseline", "docker-cis-baseline", "rhel-stig-baseline"],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.is_cis_baseline_repo", return_value=False)
-        mocker.patch("standardize_licenses.LicenseStandardizer.is_disa_baseline_repo", return_value=False)
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", return_value=("LICENSE", "abc"))
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache")
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.is_cis_baseline_repo", return_value=False
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.is_disa_baseline_repo", return_value=False
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file",
+            return_value=("LICENSE", "abc"),
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache"
+        )
 
         result = runner.invoke(app, ["--pattern", "*baseline", "--dry-run"])
 
@@ -247,7 +329,10 @@ class TestSanityChecks:
             "standardize_licenses.LicenseStandardizer.get_saf_repos",
             return_value=[f"repo-{i}" for i in range(10)],
         )
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", return_value={"fork": False, "archived": False, "default_branch": "main"})
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            return_value={"fork": False, "archived": False, "default_branch": "main"},
+        )
 
         def mock_check(repo_name):
             # First 6 have no license, rest have LICENSE
@@ -255,8 +340,12 @@ class TestSanityChecks:
                 return (None, None)
             return ("LICENSE", "abc")
 
-        mocker.patch("standardize_licenses.LicenseStandardizer.check_license_file", side_effect=mock_check)
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache")
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.check_license_file", side_effect=mock_check
+        )
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_license_content", return_value="Apache"
+        )
 
         result = runner.invoke(app, ["--pattern", "*", "--dry-run", "--force"])
 
@@ -275,7 +364,9 @@ class TestSanityChecks:
             is_fork = int(repo_name.split("-")[1]) < 4
             return {"fork": is_fork, "archived": False, "default_branch": "main"}
 
-        mocker.patch("standardize_licenses.LicenseStandardizer.get_repo_metadata", side_effect=mock_metadata)
+        mocker.patch(
+            "standardize_licenses.LicenseStandardizer.get_repo_metadata", side_effect=mock_metadata
+        )
 
         result = runner.invoke(app, ["--pattern", "*", "--dry-run", "--force"])
 

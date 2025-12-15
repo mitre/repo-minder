@@ -3,10 +3,6 @@
 import sys
 from pathlib import Path
 
-import pytest
-from prompt_toolkit.input.defaults import create_pipe_input
-from prompt_toolkit.output import DummyOutput
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -16,7 +12,9 @@ class TestInteractiveMode:
     def test_interactive_mode_with_simulated_input(self, mocker):
         """Test interactive mode with simulated keyboard input."""
         # For now, mock questionary to avoid complex prompt_toolkit setup
-        mocker.patch("questionary.select", return_value=mocker.Mock(ask=lambda: "Process single repo"))
+        mocker.patch(
+            "questionary.select", return_value=mocker.Mock(ask=lambda: "Process single repo")
+        )
         mocker.patch("questionary.text", return_value=mocker.Mock(ask=lambda: "saf"))
         mocker.patch("questionary.confirm", return_value=mocker.Mock(ask=lambda: True))
         mocker.patch("questionary.checkbox", return_value=mocker.Mock(ask=lambda: []))
@@ -36,6 +34,7 @@ class TestInteractiveMode:
         )
 
         from typer.testing import CliRunner
+
         from standardize_licenses import app
 
         runner = CliRunner()
