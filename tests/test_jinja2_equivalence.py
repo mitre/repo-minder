@@ -1,8 +1,9 @@
 """Test that Jinja2 templates produce equivalent output to static templates."""
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from standardize_licenses import HAS_JINJA2, TEMPLATE_VARS
@@ -55,7 +56,7 @@ class TestJinja2EquivalenceToStatic:
             assert content in jinja_output, f"Jinja2 missing: {content}"
             # DISA template might have different wording
             if content == "DISA STIGs":
-                assert "DISA" in disa_template, f"Static missing DISA reference"
+                assert "DISA" in disa_template, "Static missing DISA reference"
             else:
                 assert content in disa_template, f"Static missing: {content}"
 
