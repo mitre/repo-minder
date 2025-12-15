@@ -10,12 +10,13 @@ This script:
 6. Handles forks, archived repos, rate limits, and errors
 
 Usage:
-    python3 standardize_mitre_licenses.py --dry-run
-    python3 standardize_mitre_licenses.py --skip cis
-    python3 standardize_mitre_licenses.py --verify-only
-    python3 standardize_mitre_licenses.py --repo saf
-    python3 standardize_mitre_licenses.py --pattern '*-stig-baseline'
-    python3 standardize_mitre_licenses.py --skip-archived --resume-from nginx-baseline
+    uv run python standardize_licenses.py --dry-run
+    uv run python standardize_licenses.py --skip cis
+    uv run python standardize_licenses.py --verify-only
+    uv run python standardize_licenses.py --repo saf
+    uv run python standardize_licenses.py --pattern '*-stig-baseline'
+    uv run python standardize_licenses.py --skip-archived --resume-from nginx-baseline
+    uv run python standardize_licenses.py --interactive
 """
 
 import json
@@ -26,9 +27,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import questionary
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
 from typing_extensions import Annotated
 
 try:
@@ -100,7 +104,7 @@ class LicenseStandardizer:
 
     def get_saf_repos(self) -> List[str]:
         """Get list of all SAF team repos via gh cli."""
-        print("Fetching SAF team repositories...")
+        console.print("[cyan]Fetching SAF team repositories...[/cyan]")
         result = subprocess.run(
             ["gh", "api", "orgs/mitre/teams/saf/repos", "--paginate", "--jq", ".[].name"],
             capture_output=True,
@@ -108,7 +112,7 @@ class LicenseStandardizer:
             check=True,
         )
         repos = [line.strip() for line in result.stdout.strip().split("\n")]
-        print(f"Found {len(repos)} repos in SAF team\n")
+        console.print(f"[green]Found {len(repos)} repos in SAF team[/green]\n")
         return repos
 
     def check_license_file(self, repo_name: str) -> Tuple[Optional[str], Optional[str]]:
@@ -249,7 +253,7 @@ class LicenseStandardizer:
         template = self.templates[template_type]
 
         if self.dry_run:
-            print(f"  [DRY RUN] Would create LICENSE.md using {template_type} template")
+            console.print(f"  [yellow][DRY RUN] Would create LICENSE.md using {template_type} template[/yellow]")
             return True
 
         with open("temp_license.md", "w") as f:
@@ -281,8 +285,8 @@ class LicenseStandardizer:
         template = self.templates[template_type]
 
         if self.dry_run:
-            print(
-                f"  [DRY RUN] Would update {old_file} → LICENSE.md using {template_type} template"
+            console.print(
+                f"  [yellow][DRY RUN] Would update {old_file} → LICENSE.md using {template_type} template[/yellow]"
             )
             return True
 
@@ -327,7 +331,7 @@ class LicenseStandardizer:
         Path("temp_license.md").unlink()
 
         if result.returncode != 0:
-            print(f"  ❌ Failed to create LICENSE.md: {result.stderr}")
+            console.print(f"  [red]❌ Failed to create LICENSE.md: {result.stderr}[/red]")
             return False
 
         # Delete old LICENSE if it existed
@@ -339,7 +343,7 @@ class LicenseStandardizer:
     def delete_old_license(self, repo_name: str, branch: str):
         """Delete old LICENSE file (no .md extension)."""
         if self.dry_run:
-            print("  [DRY RUN] Would delete old LICENSE file")
+            console.print("  [yellow][DRY RUN] Would delete old LICENSE file[/yellow]")
             return
 
         # Get current SHA of LICENSE file
@@ -465,9 +469,9 @@ class LicenseStandardizer:
 
     def verify_all(self, repos: List[str]):
         """Verify all repos have LICENSE.md."""
-        print("\n" + "=" * 70)
-        print("VERIFICATION")
-        print("=" * 70 + "\n")
+        console.print("\n" + "=" * 70)
+        console.print("VERIFICATION")
+        console.print("=" * 70 + "\n")
 
         missing = []
         for repo in repos:
@@ -477,11 +481,11 @@ class LicenseStandardizer:
                 missing.append(repo)
 
         if missing:
-            print(f"❌ {len(missing)} repos still missing LICENSE.md:")
+            console.print(f"[red]❌ {len(missing)} repos still missing LICENSE.md:[/red]")
             for repo in missing:
-                print(f"  - {repo}")
+                console.print(f"  - {repo}")
         else:
-            print(f"✅ All {self.stats['verified']} repos have LICENSE.md")
+            console.print(f"[green]✅ All {self.stats['verified']} repos have LICENSE.md[/green]")
 
     def save_dry_run_plan(self, output_format="txt", output_file=None):
         """Save dry-run plan to file for review.
@@ -521,20 +525,20 @@ class LicenseStandardizer:
                 f.write(f"Will rename:      {self.stats['renamed']}\n")
                 f.write(f"Will skip:        {self.stats['skipped']}\n")
 
-            print(f"\n📝 Dry-run plan saved to: {plan_file}")
+            console.print(f"\n[green]📝 Dry-run plan saved to: {plan_file}[/green]")
 
         # JSON format
         elif output_format == "json":
             import json as json_lib
 
             plan_file = Path(output_file) if output_file else Path("dry_run_plan.json")
-            output = {
+            output_data = {
                 "summary": self.stats,
                 "results": self.results,
             }
             with open(plan_file, "w") as f:
-                json_lib.dump(output, f, indent=2)
-            print(f"\n📝 Dry-run plan saved to: {plan_file}")
+                json_lib.dump(output_data, f, indent=2)
+            console.print(f"\n[green]📝 Dry-run plan saved to: {plan_file}[/green]")
 
         # CSV format
         elif output_format == "csv":
@@ -547,31 +551,35 @@ class LicenseStandardizer:
                 )
                 writer.writeheader()
                 writer.writerows(self.results)
-            print(f"\n📝 Dry-run plan saved to: {plan_file}")
+            console.print(f"\n[green]📝 Dry-run plan saved to: {plan_file}[/green]")
 
     def print_summary(self):
         """Print summary of operations."""
-        print("\n" + "=" * 70)
-        print("SUMMARY")
-        print("=" * 70)
-        print(f"Total repos:      {self.stats['total']}")
-        print(f"Updated:          {self.stats['updated']}")
-        print(f"Created:          {self.stats['created']}")
-        print(f"Renamed:          {self.stats['renamed']}")
-        print(f"Skipped:          {self.stats['skipped']}")
+        table = Table(title="Summary")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Count", style="green", justify="right")
+
+        table.add_row("Total repos", str(self.stats["total"]))
+        table.add_row("Updated", str(self.stats["updated"]))
+        table.add_row("Created", str(self.stats["created"]))
+        table.add_row("Renamed", str(self.stats["renamed"]))
+        table.add_row("Skipped", str(self.stats["skipped"]))
         if self.stats["forks"] > 0:
-            print(f"  - Forks:        {self.stats['forks']}")
+            table.add_row("  - Forks", str(self.stats["forks"]))
         if self.stats["archived"] > 0:
-            print(f"  - Archived:     {self.stats['archived']}")
-        print(f"Failed:           {self.stats['failed']}")
+            table.add_row("  - Archived", str(self.stats["archived"]))
+        table.add_row("Failed", str(self.stats["failed"]), style="red" if self.stats["failed"] > 0 else "green")
         if self.stats["verified"] > 0:
-            print(f"Verified:         {self.stats['verified']}")
+            table.add_row("Verified", str(self.stats["verified"]))
+
+        console.print("\n")
+        console.print(table)
 
         if self.stats["failed"] > 0:
-            print("\nFailed repos:")
+            console.print("\n[red]Failed repos:[/red]")
             for r in self.results:
                 if r["status"] == "failed":
-                    print(f"  - {r['repo']}: {r.get('error', 'unknown error')}")
+                    console.print(f"  - {r['repo']}: {r.get('error', 'unknown error')}")
 
     def run(
         self,
@@ -585,22 +593,22 @@ class LicenseStandardizer:
 
         if repo_filter:
             repos = [r for r in repos if repo_filter.lower() in r.lower()]
-            print(f"Filtered to {len(repos)} repos matching '{repo_filter}'\n")
+            console.print(f"[cyan]Filtered to {len(repos)} repos matching '{repo_filter}'[/cyan]\n")
 
         if pattern:
             import fnmatch
 
             repos = [r for r in repos if fnmatch.fnmatch(r, pattern)]
-            print(f"Filtered to {len(repos)} repos matching pattern '{pattern}'\n")
+            console.print(f"[cyan]Filtered to {len(repos)} repos matching pattern '{pattern}'[/cyan]\n")
 
         # Resume from specific repo
         if resume_from:
             try:
                 start_index = repos.index(resume_from)
                 repos = repos[start_index:]
-                print(f"Resuming from '{resume_from}' ({len(repos)} repos remaining)\n")
+                console.print(f"[cyan]Resuming from '{resume_from}' ({len(repos)} repos remaining)[/cyan]\n")
             except ValueError:
-                print(f"❌ Resume repo '{resume_from}' not found in list")
+                console.print(f"[red]❌ Resume repo '{resume_from}' not found in list[/red]")
                 return 1
 
         self.stats["total"] = len(repos)
@@ -664,8 +672,51 @@ def standardize(
     repo_filter: Annotated[Optional[str], typer.Option(help="Filter repos by substring")] = None,
     output_format: Annotated[str, typer.Option(help="Dry-run output format")] = "txt",
     output: Annotated[Optional[str], typer.Option("-o", help="Custom output filename")] = None,
+    interactive: Annotated[bool, typer.Option("--interactive", "-i", help="Interactive mode with prompts")] = False,
 ):
     """Standardize LICENSE files in MITRE SAF repositories."""
+    # Interactive mode
+    if interactive:
+        console.print(Panel("[bold cyan]MITRE License Standardizer - Interactive Mode[/bold cyan]"))
+
+        # Ask what to do
+        action = questionary.select(
+            "What would you like to do?",
+            choices=[
+                "Process all SAF repos",
+                "Process specific pattern (e.g., *-stig-baseline)",
+                "Process single repo",
+                "Verify all repos have LICENSE.md",
+            ],
+        ).ask()
+
+        if action == "Process specific pattern (e.g., *-stig-baseline)":
+            pattern = questionary.text("Enter pattern (e.g., '*-stig-baseline'):").ask()
+        elif action == "Process single repo":
+            repo = questionary.text("Enter repo name:").ask()
+        elif action == "Verify all repos have LICENSE.md":
+            verify_only = True
+
+        # Ask about options
+        dry_run = questionary.confirm("Dry-run mode (preview only)?", default=True).ask()
+
+        skip_types = questionary.checkbox(
+            "Skip any template types?",
+            choices=["cis", "disa", "plain"],
+        ).ask()
+        skip = skip_types if skip_types else None
+
+        skip_archived = questionary.confirm("Skip archived repos?", default=False).ask()
+
+        if dry_run:
+            output_format = questionary.select(
+                "Output format for dry-run plan?",
+                choices=["txt", "json", "csv"],
+                default="txt",
+            ).ask()
+
+        console.print("\n[green]Starting...[/green]\n")
+
     # Verify Jinja2 templates exist
     required_templates = ["base.j2", "cis.j2", "disa.j2", "plain.j2"]
     for tmpl in required_templates:
