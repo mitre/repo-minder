@@ -1,6 +1,5 @@
 """Tests for Pydantic Settings configuration system."""
 
-
 import pytest
 
 from repo_minder import Settings
