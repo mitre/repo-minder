@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mitre-license-standardizer"
+name = "mitre-repo-minder"
 version = "1.0.0"
-description = "Automated LICENSE file standardization for MITRE repositories"
+description = "Repository file standardization and compliance tool for MITRE"
 authors = [
     {name = "MITRE SAF Team", email = "saf@mitre.org"}
 ]
 readme = "README.md"
 requires-python = ">=3.7"
 license = {text = "Apache-2.0"}
-keywords = ["license", "mitre", "automation", "github"]
+keywords = ["repository", "compliance", "mitre", "automation", "github", "license", "standards"]
 dependencies = [
     "jinja2>=3.0.0",
     "questionary>=1.10.0",
@@ -33,12 +33,12 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mitre/license-standardizer"
-Repository = "https://github.com/mitre/license-standardizer"
-Issues = "https://github.com/mitre/license-standardizer/issues"
+Homepage = "https://github.com/mitre/repo-minder"
+Repository = "https://github.com/mitre/repo-minder"
+Issues = "https://github.com/mitre/repo-minder/issues"
 
 [project.scripts]
-standardize-licenses = "standardize_licenses:main"
+repo-minder = "standardize_licenses:main"
 
 [project.optional-dependencies]
 dev = [

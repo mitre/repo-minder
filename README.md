@@ -1,7 +1,6 @@
-# MITRE License Standardizer
+# MITRE Repo Minder
 
-Automated tool for standardizing LICENSE files across MITRE open-source
-repositories.
+Repository file standardization and compliance tool for MITRE open-source projects.
 
 ## Features
 
@@ -17,23 +16,29 @@ repositories.
 ## Quick Start
 
 ```bash
-# Test on single repo (dry-run)
+# Install the tool
+pip install mitre-repo-minder
+
+# Or use with uv (development)
 uv run python standardize_licenses.py --repo saf --dry-run
 
-# Process all SAF repos, skip CIS baselines (already done)
-uv run python standardize_licenses.py --skip cis
+# Test on single repo (dry-run)
+repo-minder --repo saf --dry-run
+
+# Process all SAF repos, skip CIS baselines
+repo-minder --skip cis
 
 # Process only STIG baselines
-uv run python standardize_licenses.py --pattern '*-stig-baseline'
+repo-minder --pattern '*-stig-baseline'
 
-# Resume after failure
-uv run python standardize_licenses.py --resume-from nginx-baseline
+# Interactive mode
+repo-minder --interactive
 ```
 
 ## Usage
 
 ```
-uv run python standardize_licenses.py [OPTIONS]
+repo-minder [OPTIONS]
 
 Options:
   --repo REPO                  Process single repo (test mode)
