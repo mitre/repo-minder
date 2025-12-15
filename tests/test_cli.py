@@ -6,7 +6,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from standardize_licenses import app
+from repo_minder import app
 
 # CliRunner with color disabled for easier testing
 runner = CliRunner(env={"NO_COLOR": "1"})
@@ -52,17 +52,17 @@ class TestCLIWithMocks:
         """Test dry-run on single repo."""
         # Mock get_repo_metadata
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            "repo_minder.RepoMinder.get_repo_metadata",
             return_value={"fork": False, "archived": False, "default_branch": "main"},
         )
         # Mock check_license_file
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.check_license_file",
+            "repo_minder.RepoMinder.check_license_file",
             return_value=("LICENSE", "abc123"),
         )
         # Mock get_license_content
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_license_content",
+            "repo_minder.RepoMinder.get_license_content",
             return_value="Licensed under Apache 2.0",
         )
 
@@ -74,12 +74,12 @@ class TestCLIWithMocks:
         """Test --verify-only flag."""
         # Mock get_saf_repos
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_saf_repos",
+            "repo_minder.RepoMinder.get_saf_repos",
             return_value=["saf", "heimdall2"],
         )
         # Mock verify_license
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.verify_license",
+            "repo_minder.RepoMinder.verify_license",
             return_value=True,
         )
 

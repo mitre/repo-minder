@@ -20,6 +20,8 @@ Usage:
 """
 
 import json
+import logging
+import os
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -29,7 +31,10 @@ from typing import Dict, List, Optional, Tuple
 
 import questionary
 import typer
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
@@ -42,11 +47,45 @@ try:
 except ImportError:
     HAS_JINJA2 = False
 
-# Rich console for output
+
+# Configuration with Pydantic Settings
+class Settings(BaseSettings):
+    """Application configuration loaded from environment variables or .env file."""
+
+    organization: str = Field(
+        default="mitre", description="GitHub organization name (e.g., 'mitre', 'ansible-lockdown')"
+    )
+    team: str = Field(default="saf", description="GitHub team name within the organization")
+    log_level: str = Field(
+        default="INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)"
+    )
+
+    model_config = SettingsConfigDict(
+        env_prefix="REPO_MINDER_",  # Reads REPO_MINDER_ORG, REPO_MINDER_TEAM, etc.
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+
+# Initialize settings
+settings = Settings()
+
+# Setup logging with Rich handler
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True, markup=True)],
+)
+logger = logging.getLogger("repo_minder")
+
+# Rich console for user-facing output (tables, panels, progress bars)
 console = Console()
 app = typer.Typer(
-    name="license-standardizer",
-    help="Standardize LICENSE files across MITRE SAF repositories",
+    name="repo-minder",
+    help="Repository file standardization and compliance tool",
     add_completion=False,
 )
 
@@ -62,10 +101,21 @@ TEMPLATE_VARS = {
 }
 
 
-class LicenseStandardizer:
-    """Standardize LICENSE files across MITRE repos."""
+class RepoMinder:
+    """Repository file standardization and compliance tool."""
 
-    def __init__(self, dry_run=False, skip_templates=None, skip_archived=False, delay=0.5):
+    def __init__(
+        self,
+        dry_run=False,
+        skip_templates=None,
+        skip_archived=False,
+        delay=0.5,
+        organization=None,
+        team=None,
+    ):
+        # Use provided values or fall back to global settings
+        self.organization = organization or settings.organization
+        self.team = team or settings.team
         self.dry_run = dry_run
         self.skip_templates = skip_templates or []
         self.skip_archived = skip_archived
@@ -105,21 +155,29 @@ class LicenseStandardizer:
         }
 
     def get_saf_repos(self) -> List[str]:
-        """Get list of all SAF team repos via gh cli."""
-        console.print("[cyan]Fetching SAF team repositories...[/cyan]")
+        """Get list of all team repos via gh cli."""
+        logger.info(f"Fetching {self.organization}/{self.team} team repositories...")
         result = subprocess.run(
-            ["gh", "api", "orgs/mitre/teams/saf/repos", "--paginate", "--jq", ".[].name"],
+            [
+                "gh",
+                "api",
+                f"orgs/{self.organization}/teams/{self.team}/repos",
+                "--paginate",
+                "--jq",
+                ".[].name",
+            ],
             capture_output=True,
             text=True,
         )
 
         if result.returncode != 0:
             raise ValueError(
-                "Failed to fetch SAF team repositories. Make sure you're authenticated with 'gh auth login'"
+                f"Failed to fetch {self.organization}/{self.team} team repositories. "
+                "Make sure you're authenticated with 'gh auth login'"
             )
 
         repos = [line.strip() for line in result.stdout.strip().split("\n")]
-        console.print(f"[green]Found {len(repos)} repos in SAF team[/green]\n")
+        logger.info(f"Found {len(repos)} repos in {self.organization}/{self.team} team")
         return repos
 
     def check_license_file(self, repo_name: str) -> Tuple[Optional[str], Optional[str]]:
@@ -144,7 +202,7 @@ class LicenseStandardizer:
                 [
                     "gh",
                     "api",
-                    f"repos/mitre/{repo_name}/contents/{filename}",
+                    f"repos/{self.organization}/{repo_name}/contents/{filename}",
                     "--jq",
                     '{"sha": .sha, "content": .content}',
                 ],
@@ -160,7 +218,13 @@ class LicenseStandardizer:
     def get_license_content(self, repo_name: str, file_path: str) -> str:
         """Get current LICENSE file content."""
         result = subprocess.run(
-            ["gh", "api", f"repos/mitre/{repo_name}/contents/{file_path}", "--jq", ".content"],
+            [
+                "gh",
+                "api",
+                f"repos/{self.organization}/{repo_name}/contents/{file_path}",
+                "--jq",
+                ".content",
+            ],
             capture_output=True,
             text=True,
         )
@@ -248,7 +312,7 @@ class LicenseStandardizer:
             [
                 "gh",
                 "api",
-                f"repos/mitre/{repo_name}",
+                f"repos/{self.organization}/{repo_name}",
                 "--jq",
                 '{"fork": .fork, "archived": .archived, "default_branch": .default_branch}',
             ],
@@ -260,7 +324,7 @@ class LicenseStandardizer:
             # Friendly error message instead of raw exception
             if "Not Found" in result.stderr or "Could not resolve" in result.stderr:
                 raise ValueError(
-                    f"Repository 'mitre/{repo_name}' not found or you don't have access to it"
+                    f"Repository '{self.organization}/{repo_name}' not found or you don't have access to it"
                 )
             else:
                 raise ValueError(f"Failed to get repository metadata: {result.stderr.strip()}")
@@ -270,7 +334,7 @@ class LicenseStandardizer:
     def get_default_branch(self, repo_name: str) -> str:
         """Get default branch for repo."""
         result = subprocess.run(
-            ["gh", "api", f"repos/mitre/{repo_name}", "--jq", ".default_branch"],
+            ["gh", "api", f"repos/{self.organization}/{repo_name}", "--jq", ".default_branch"],
             capture_output=True,
             text=True,
         )
@@ -299,7 +363,7 @@ class LicenseStandardizer:
         cmd = [
             "gh",
             "api",
-            f"repos/mitre/{repo_name}/contents/LICENSE.md",
+            f"repos/{self.organization}/{repo_name}/contents/LICENSE.md",
             "-X",
             "PUT",
             "-F",
@@ -337,7 +401,7 @@ class LicenseStandardizer:
             cmd = [
                 "gh",
                 "api",
-                f"repos/mitre/{repo_name}/contents/LICENSE.md",
+                f"repos/{self.organization}/{repo_name}/contents/LICENSE.md",
                 "-X",
                 "PUT",
                 "-F",
@@ -354,7 +418,7 @@ class LicenseStandardizer:
             cmd = [
                 "gh",
                 "api",
-                f"repos/mitre/{repo_name}/contents/LICENSE.md",
+                f"repos/{self.organization}/{repo_name}/contents/LICENSE.md",
                 "-X",
                 "PUT",
                 "-F",
@@ -386,7 +450,13 @@ class LicenseStandardizer:
 
         # Get current SHA of LICENSE file
         result = subprocess.run(
-            ["gh", "api", f"repos/mitre/{repo_name}/contents/LICENSE", "--jq", ".sha"],
+            [
+                "gh",
+                "api",
+                f"repos/{self.organization}/{repo_name}/contents/LICENSE",
+                "--jq",
+                ".sha",
+            ],
             capture_output=True,
             text=True,
         )
@@ -398,7 +468,7 @@ class LicenseStandardizer:
             [
                 "gh",
                 "api",
-                f"repos/mitre/{repo_name}/contents/LICENSE",
+                f"repos/{self.organization}/{repo_name}/contents/LICENSE",
                 "-X",
                 "DELETE",
                 "-F",
@@ -1068,6 +1138,13 @@ class LicenseStandardizer:
 
 @app.command()
 def standardize(
+    org: Annotated[
+        Optional[str],
+        typer.Option("--org", help="GitHub organization (default: from env or 'mitre')"),
+    ] = None,
+    team: Annotated[
+        Optional[str], typer.Option("--team", help="GitHub team (default: from env or 'saf')")
+    ] = None,
     repo: Annotated[Optional[str], typer.Option(help="Process single repo (test mode)")] = None,
     pattern: Annotated[
         Optional[str], typer.Option(help="Glob pattern (e.g., '*-stig-baseline')")
@@ -1209,7 +1286,9 @@ def standardize(
         raise typer.Exit(1)
 
     # Run standardization
-    standardizer = LicenseStandardizer(
+    standardizer = RepoMinder(
+        organization=org,  # Uses settings default if None
+        team=team,  # Uses settings default if None
         dry_run=dry_run or verify_only,
         skip_templates=skip or [],
         skip_archived=skip_archived,

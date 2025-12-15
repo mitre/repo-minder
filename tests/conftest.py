@@ -7,7 +7,7 @@ import pytest
 
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from standardize_licenses import HAS_JINJA2
+from repo_minder import HAS_JINJA2
 
 
 @pytest.fixture

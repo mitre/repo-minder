@@ -6,7 +6,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from standardize_licenses import app
+from repo_minder import app
 
 runner = CliRunner(env={"NO_COLOR": "1"})
 
@@ -18,7 +18,7 @@ class TestCtrlCHandling:
         """Ctrl-C should exit gracefully without stack trace."""
         # Mock to raise KeyboardInterrupt
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_saf_repos",
+            "repo_minder.RepoMinder.get_saf_repos",
             side_effect=KeyboardInterrupt(),
         )
 
@@ -37,28 +37,28 @@ class TestSkipUnchangedFiles:
         """Don't update if LICENSE.md already matches our template."""
         # Mock repo with LICENSE.md that already has correct content
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_saf_repos",
+            "repo_minder.RepoMinder.get_saf_repos",
             return_value=["saf"],
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            "repo_minder.RepoMinder.get_repo_metadata",
             return_value={"fork": False, "archived": False, "default_branch": "main"},
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.check_license_file",
+            "repo_minder.RepoMinder.check_license_file",
             return_value=("LICENSE.md", "abc123"),
         )
 
         # Return content that MATCHES our plain template
         from jinja2 import Environment, FileSystemLoader
 
-        from standardize_licenses import TEMPLATE_VARS
+        from repo_minder import TEMPLATE_VARS
 
         env = Environment(loader=FileSystemLoader("templates"))
         correct_content = env.get_template("plain.j2").render(**TEMPLATE_VARS)
 
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_license_content",
+            "repo_minder.RepoMinder.get_license_content",
             return_value=correct_content,
         )
 
@@ -74,22 +74,22 @@ class TestSkipUnchangedFiles:
     def test_update_if_license_needs_formatting(self, mocker):
         """Update if LICENSE.md needs formatting cleanup."""
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_saf_repos",
+            "repo_minder.RepoMinder.get_saf_repos",
             return_value=["saf"],
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            "repo_minder.RepoMinder.get_repo_metadata",
             return_value={"fork": False, "archived": False, "default_branch": "main"},
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.check_license_file",
+            "repo_minder.RepoMinder.check_license_file",
             return_value=("LICENSE.md", "abc123"),
         )
 
         # Return content that DIFFERS from template (needs formatting)
         old_messy_content = "Licensed under Apache 2.0\n\n\nToo many blank lines"
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_license_content",
+            "repo_minder.RepoMinder.get_license_content",
             return_value=old_messy_content,
         )
 
@@ -100,8 +100,8 @@ class TestSkipUnchangedFiles:
 
     def test_unchanged_stat_exists_in_code(self):
         """Verify 'unchanged' stat is tracked in stats dict."""
-        from standardize_licenses import LicenseStandardizer
+        from repo_minder import RepoMinder
 
-        standardizer = LicenseStandardizer(dry_run=True)
+        standardizer = RepoMinder(dry_run=True)
         assert "unchanged" in standardizer.stats
         assert standardizer.stats["unchanged"] == 0

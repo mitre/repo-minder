@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from standardize_licenses import HAS_JINJA2, TEMPLATE_VARS, TEMPLATES_DIR
+from repo_minder import HAS_JINJA2, TEMPLATE_VARS, TEMPLATES_DIR
 
 # Skip tests if Jinja2 not available
 pytestmark = pytest.mark.skipif(not HAS_JINJA2, reason="Jinja2 not installed")

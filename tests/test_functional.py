@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from standardize_licenses import LicenseStandardizer
+from repo_minder import RepoMinder
 
 
 @pytest.fixture
@@ -18,8 +18,8 @@ def mock_gh_api():
         yield mock_run
 
 
-class TestLicenseStandardizerFunctional:
-    """Functional tests for LicenseStandardizer class."""
+class TestRepoMinderFunctional:
+    """Functional tests for RepoMinder class."""
 
     def test_fork_detection_skips_repo(self, mock_gh_api):
         """Test that forked repos are skipped."""
@@ -28,7 +28,7 @@ class TestLicenseStandardizerFunctional:
             returncode=0, stdout='{"fork": true, "archived": false, "default_branch": "main"}'
         )
 
-        standardizer = LicenseStandardizer(dry_run=True)
+        standardizer = RepoMinder(dry_run=True)
         result = standardizer.process_repo("some-fork")
 
         assert result["status"] == "skipped"
@@ -42,7 +42,7 @@ class TestLicenseStandardizerFunctional:
             returncode=0, stdout='{"fork": false, "archived": true, "default_branch": "main"}'
         )
 
-        standardizer = LicenseStandardizer(dry_run=True, skip_archived=True)
+        standardizer = RepoMinder(dry_run=True, skip_archived=True)
         result = standardizer.process_repo("archived-repo")
 
         assert result["status"] == "skipped"
@@ -62,7 +62,7 @@ class TestLicenseStandardizerFunctional:
             Mock(returncode=0, stdout='"TGljZW5zZSBjb250ZW50"'),  # "License content" in base64
         ]
 
-        standardizer = LicenseStandardizer(dry_run=True, skip_archived=False)
+        standardizer = RepoMinder(dry_run=True, skip_archived=False)
         result = standardizer.process_repo("archived-repo")
 
         assert result["status"] == "success"
@@ -78,7 +78,7 @@ class TestLicenseStandardizerFunctional:
             Mock(returncode=0, stdout='"Q0lTIEJlbmNobWFya3M="'),  # "CIS Benchmarks" in base64
         ]
 
-        standardizer = LicenseStandardizer(dry_run=True, skip_templates=["cis"])
+        standardizer = RepoMinder(dry_run=True, skip_templates=["cis"])
         result = standardizer.process_repo("aws-foundations-cis-baseline")
 
         assert result["status"] == "skipped"
@@ -95,7 +95,7 @@ class TestLicenseStandardizerFunctional:
             *[Mock(returncode=1) for _ in range(7)],  # All license variants don't exist
         ]
 
-        standardizer = LicenseStandardizer(dry_run=True)
+        standardizer = RepoMinder(dry_run=True)
         result = standardizer.process_repo("nginx-stigready-baseline")
 
         assert result["status"] == "success"
@@ -121,7 +121,7 @@ class TestLicenseStandardizerFunctional:
             Mock(returncode=0, stdout=f'"{content}"'),  # Get content
         ]
 
-        standardizer = LicenseStandardizer(dry_run=True)
+        standardizer = RepoMinder(dry_run=True)
         result = standardizer.process_repo("saf")
 
         assert result["status"] == "success"
@@ -144,7 +144,7 @@ class TestLicenseStandardizerFunctional:
             Mock(returncode=0, stdout=f'"{content}"'),  # Get content
         ]
 
-        standardizer = LicenseStandardizer(dry_run=True)
+        standardizer = RepoMinder(dry_run=True)
         result = standardizer.process_repo("heimdall2")
 
         assert result["status"] == "success"
@@ -159,7 +159,7 @@ class TestEdgeCases:
         """Test that API errors are caught and reported."""
         mock_gh_api.side_effect = Exception("API rate limit exceeded")
 
-        standardizer = LicenseStandardizer(dry_run=True)
+        standardizer = RepoMinder(dry_run=True)
         result = standardizer.process_repo("test-repo")
 
         assert result["status"] == "failed"
@@ -170,7 +170,7 @@ class TestEdgeCases:
         """Test that dry-run mode creates plan file."""
         monkeypatch.chdir(tmp_path)
 
-        standardizer = LicenseStandardizer(dry_run=True)
+        standardizer = RepoMinder(dry_run=True)
         standardizer.results = [
             {
                 "repo": "saf",
@@ -201,7 +201,7 @@ class TestEdgeCases:
 
     def test_statistics_tracking(self):
         """Test that statistics are tracked correctly."""
-        standardizer = LicenseStandardizer(dry_run=True)
+        standardizer = RepoMinder(dry_run=True)
 
         assert standardizer.stats["total"] == 0
         assert standardizer.stats["updated"] == 0

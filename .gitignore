@@ -48,3 +48,6 @@ temp_license.md
 
 # Backup directories
 backups/
+
+# Environment configuration
+.env

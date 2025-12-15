@@ -21,21 +21,21 @@ class TestInteractiveMode:
 
         # Mock GitHub API
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            "repo_minder.RepoMinder.get_repo_metadata",
             return_value={"fork": False, "archived": False, "default_branch": "main"},
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.check_license_file",
+            "repo_minder.RepoMinder.check_license_file",
             return_value=("LICENSE", "abc"),
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_license_content",
+            "repo_minder.RepoMinder.get_license_content",
             return_value="Apache 2.0",
         )
 
         from typer.testing import CliRunner
 
-        from standardize_licenses import app
+        from repo_minder import app
 
         runner = CliRunner(env={"NO_COLOR": "1"})
         result = runner.invoke(app, ["--interactive"])

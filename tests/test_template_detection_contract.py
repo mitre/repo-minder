@@ -6,7 +6,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from standardize_licenses import app
+from repo_minder import app
 
 runner = CliRunner(env={"NO_COLOR": "1"})
 
@@ -17,19 +17,19 @@ class TestCISDetectionThroughCLI:
     def test_cis_baseline_repo_uses_cis_template(self, mocker):
         """CIS baseline repos should use CIS template (tested via CLI)."""
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_saf_repos",
+            "repo_minder.RepoMinder.get_saf_repos",
             return_value=["aws-foundations-cis-baseline"],
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            "repo_minder.RepoMinder.get_repo_metadata",
             return_value={"fork": False, "archived": False, "default_branch": "main"},
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.check_license_file",
+            "repo_minder.RepoMinder.check_license_file",
             return_value=("LICENSE", "abc"),
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_license_content",
+            "repo_minder.RepoMinder.get_license_content",
             return_value="Old content",
         )
 
@@ -42,19 +42,19 @@ class TestCISDetectionThroughCLI:
     def test_cis_hardening_repo_uses_cis_template(self, mocker):
         """CIS hardening repos should use CIS template."""
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_saf_repos",
+            "repo_minder.RepoMinder.get_saf_repos",
             return_value=["ansible-cis-docker-ce-hardening"],
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            "repo_minder.RepoMinder.get_repo_metadata",
             return_value={"fork": False, "archived": False, "default_branch": "main"},
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.check_license_file",
+            "repo_minder.RepoMinder.check_license_file",
             return_value=("LICENSE", "abc"),
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_license_content",
+            "repo_minder.RepoMinder.get_license_content",
             return_value="Old content",
         )
 
@@ -70,19 +70,19 @@ class TestDISADetectionThroughCLI:
     def test_stig_baseline_uses_disa_template(self, mocker):
         """STIG baseline repos should use DISA template."""
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_saf_repos",
+            "repo_minder.RepoMinder.get_saf_repos",
             return_value=["rhel-7-stig-baseline"],
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            "repo_minder.RepoMinder.get_repo_metadata",
             return_value={"fork": False, "archived": False, "default_branch": "main"},
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.check_license_file",
+            "repo_minder.RepoMinder.check_license_file",
             return_value=("LICENSE", "abc"),
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_license_content",
+            "repo_minder.RepoMinder.get_license_content",
             return_value="Old content",
         )
 
@@ -98,19 +98,19 @@ class TestPlainDetectionThroughCLI:
     def test_saf_tools_use_plain_template(self, mocker):
         """SAF tools should use plain template (not CIS/DISA)."""
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_saf_repos",
+            "repo_minder.RepoMinder.get_saf_repos",
             return_value=["saf", "heimdall2", "vulcan"],
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            "repo_minder.RepoMinder.get_repo_metadata",
             return_value={"fork": False, "archived": False, "default_branch": "main"},
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.check_license_file",
+            "repo_minder.RepoMinder.check_license_file",
             return_value=("LICENSE", "abc"),
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_license_content",
+            "repo_minder.RepoMinder.get_license_content",
             return_value="Old content",
         )
 
@@ -128,20 +128,20 @@ class TestLicenseCorrectionThroughCLI:
     def test_saf_tool_with_wrong_cis_license_corrected(self, mocker):
         """SAF tools with CIS license should be corrected to plain."""
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_saf_repos",
+            "repo_minder.RepoMinder.get_saf_repos",
             return_value=["saf-baseline-ingestion"],
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_repo_metadata",
+            "repo_minder.RepoMinder.get_repo_metadata",
             return_value={"fork": False, "archived": False, "default_branch": "main"},
         )
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.check_license_file",
+            "repo_minder.RepoMinder.check_license_file",
             return_value=("LICENSE", "abc"),
         )
         # Has CIS content but is a tool (should be corrected to plain)
         mocker.patch(
-            "standardize_licenses.LicenseStandardizer.get_license_content",
+            "repo_minder.RepoMinder.get_license_content",
             return_value="CIS Benchmarks. Please visit www.cisecurity.org",
         )
 
