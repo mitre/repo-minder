@@ -74,6 +74,7 @@ class LicenseStandardizer:
             "updated": 0,
             "created": 0,
             "renamed": 0,
+            "unchanged": 0,
             "skipped": 0,
             "failed": 0,
             "verified": 0,
@@ -439,18 +440,27 @@ class LicenseStandardizer:
             template_type = self.detect_template_type(content=content, repo_name=repo_name)
             result["template"] = template_type
 
-            # Layer 3: Backup original LICENSE if enabled
-            if hasattr(self, "backup_dir") and self.backup_dir:
-                backup_file = self.backup_dir / f"{repo_name}.{file_path}"
-                backup_file.write_text(content)
-                console.print(f"  [dim]📦 Backed up to {backup_file.name}[/dim]")
-
             # Check if should skip this template type
             if template_type in self.skip_templates:
                 result["status"] = "skipped"
                 result["action"] = f"skip_{template_type}"
                 self.stats["skipped"] += 1
                 return result
+
+            # Check if LICENSE already matches our template (skip if unchanged)
+            expected_template = self.templates[template_type]
+            if content.strip() == expected_template.strip():
+                result["status"] = "skipped"
+                result["action"] = "unchanged"
+                self.stats["skipped"] += 1
+                self.stats["unchanged"] = self.stats.get("unchanged", 0) + 1
+                return result
+
+            # Layer 3: Backup original LICENSE if enabled (only if updating)
+            if hasattr(self, "backup_dir") and self.backup_dir:
+                backup_file = self.backup_dir / f"{repo_name}.{file_path}"
+                backup_file.write_text(content)
+                console.print(f"  [dim]📦 Backed up to {backup_file.name}[/dim]")
 
             # Update the license
             success = self.update_license(repo_name, template_type, file_path, sha, branch)
@@ -570,6 +580,8 @@ class LicenseStandardizer:
         table.add_row("Updated", str(self.stats["updated"]))
         table.add_row("Created", str(self.stats["created"]))
         table.add_row("Renamed", str(self.stats["renamed"]))
+        if self.stats.get("unchanged", 0) > 0:
+            table.add_row("Unchanged", str(self.stats["unchanged"]), style="dim")
         table.add_row("Skipped", str(self.stats["skipped"]))
         if self.stats["forks"] > 0:
             table.add_row("  - Forks", str(self.stats["forks"]))
@@ -650,36 +662,50 @@ class LicenseStandardizer:
             console.print(f"[cyan]📦 Backups will be saved to: {backup_dir}[/cyan]\n")
             self.backup_dir = backup_dir
 
-        # Process each repo with progress bar
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task(f"Processing {len(repos)} repositories...", total=len(repos))
+        # Process each repo with progress bar (with Ctrl-C handling)
+        try:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task(
+                    f"Processing {len(repos)} repositories...", total=len(repos)
+                )
 
-            for i, repo in enumerate(repos, 1):
-                progress.update(task, description=f"[{i}/{len(repos)}] {repo}")
-                result = self.process_repo(repo)
-                self.results.append(result)
+                for i, repo in enumerate(repos, 1):
+                    progress.update(task, description=f"[{i}/{len(repos)}] {repo}")
+                    result = self.process_repo(repo)
+                    self.results.append(result)
 
-                # Show status
-                if result["status"] == "success":
-                    console.print(f"  ✅ {result['action']} ({result['template']})")
-                    if self.dry_run:
-                        self.dry_run_plan.append(
-                            f"{repo}: {result['action']} ({result['template']})"
-                        )
-                elif result["status"] == "skipped":
-                    console.print(f"  ⏭️  {result['action']}")
-                else:
-                    console.print(f"  [red]❌ {result['error']}[/red]")
+                    # Show status with better formatting
+                    if result["status"] == "success":
+                        if result["action"] == "unchanged":
+                            console.print(f"  [dim]✓ unchanged ({result['template']})[/dim]")
+                        else:
+                            console.print(f"  ✅ {result['action']} ({result['template']})")
+                        if self.dry_run and result["action"] != "unchanged":
+                            self.dry_run_plan.append(
+                                f"{repo}: {result['action']} ({result['template']})"
+                            )
+                    elif result["status"] == "skipped":
+                        console.print(f"  [dim]⏭️  {result['action']}[/dim]")
+                    else:
+                        console.print(f"  [red]❌ {result['error']}[/red]")
 
-                progress.advance(task)
+                    progress.advance(task)
 
-                # Rate limiting delay
-                if i < len(repos) and not self.dry_run:
-                    time.sleep(self.delay)
+                    # Rate limiting delay
+                    if i < len(repos) and not self.dry_run:
+                        time.sleep(self.delay)
+
+        except KeyboardInterrupt:
+            console.print("\n\n[yellow]⚠️  Interrupted by user (Ctrl-C)[/yellow]")
+            console.print(
+                f"[cyan]Processed {len(self.results)}/{len(repos)} repos before interruption[/cyan]"
+            )
+            # Continue to show results for what was processed
+            pass
 
         # Layer 4: Template distribution analysis
         self.show_template_distribution()
@@ -812,45 +838,79 @@ def standardize(
         raise typer.Exit(1)
     # Interactive mode (only if not explicitly disabled)
     if interactive and not no_interactive:
-        console.print(Panel("[bold cyan]MITRE License Standardizer - Interactive Mode[/bold cyan]"))
+        # Use Panel.fit() for focused, centered header
+        console.print("\n")
+        console.print(
+            Panel.fit(
+                "[bold cyan]MITRE License Standardizer[/bold cyan]\n" "[dim]Interactive Mode[/dim]",
+                border_style="cyan",
+            )
+        )
+        console.print()
 
-        # Ask what to do
-        action = questionary.select(
-            "What would you like to do?",
-            choices=[
-                "Process all SAF repos",
-                "Process specific pattern (e.g., *-stig-baseline)",
-                "Process single repo",
-                "Verify all repos have LICENSE.md",
-            ],
-        ).ask()
-
-        if action == "Process specific pattern (e.g., *-stig-baseline)":
-            pattern = questionary.text("Enter pattern (e.g., '*-stig-baseline'):").ask()
-        elif action == "Process single repo":
-            repo = questionary.text("Enter repo name:").ask()
-        elif action == "Verify all repos have LICENSE.md":
-            verify_only = True
-
-        # Ask about options
-        dry_run = questionary.confirm("Dry-run mode (preview only)?", default=True).ask()
-
-        skip_types = questionary.checkbox(
-            "Skip any template types?",
-            choices=["cis", "disa", "plain"],
-        ).ask()
-        skip = skip_types if skip_types else None
-
-        skip_archived = questionary.confirm("Skip archived repos?", default=False).ask()
-
-        if dry_run:
-            output_format = questionary.select(
-                "Output format for dry-run plan?",
-                choices=["txt", "json", "csv"],
-                default="txt",
+        try:
+            # Ask what to do
+            action = questionary.select(
+                "What would you like to do?",
+                choices=[
+                    "Process all SAF repos",
+                    "Process specific pattern (e.g., *-stig-baseline)",
+                    "Process single repo",
+                    "Verify all repos have LICENSE.md",
+                ],
             ).ask()
 
-        console.print("\n[green]Starting...[/green]\n")
+            if not action:  # Ctrl-C returns None
+                raise KeyboardInterrupt
+
+            if action == "Process specific pattern (e.g., *-stig-baseline)":
+                pattern = questionary.text("Enter pattern (e.g., '*-stig-baseline'):").ask()
+                if pattern is None:
+                    raise KeyboardInterrupt
+            elif action == "Process single repo":
+                repo = questionary.text("Enter repo name:").ask()
+                if repo is None:
+                    raise KeyboardInterrupt
+            elif action == "Verify all repos have LICENSE.md":
+                verify_only = True
+
+            console.print()  # Spacing
+
+            # Ask about options
+            dry_run_answer = questionary.confirm("Dry-run mode (preview only)?", default=True).ask()
+            if dry_run_answer is None:
+                raise KeyboardInterrupt
+            dry_run = dry_run_answer
+
+            skip_types = questionary.checkbox(
+                "Skip any template types?",
+                choices=["cis", "disa", "plain"],
+            ).ask()
+            if skip_types is None:
+                raise KeyboardInterrupt
+            skip = skip_types if skip_types else None
+
+            skip_archived_answer = questionary.confirm("Skip archived repos?", default=False).ask()
+            if skip_archived_answer is None:
+                raise KeyboardInterrupt
+            skip_archived = skip_archived_answer
+
+            if dry_run:
+                output_format = questionary.select(
+                    "Output format for dry-run plan?",
+                    choices=["txt", "json", "csv"],
+                    default="txt",
+                ).ask()
+                if output_format is None:
+                    raise KeyboardInterrupt
+
+            console.print()
+            console.print(Panel.fit("[green]✓ Starting...[/green]", border_style="green"))
+            console.print()
+
+        except KeyboardInterrupt:
+            console.print("\n\n[yellow]⚠️  Cancelled by user[/yellow]")
+            raise typer.Exit(0) from None
 
     # Verify Jinja2 templates exist
     required_templates = ["base.j2", "cis.j2", "disa.j2", "plain.j2"]
@@ -895,7 +955,7 @@ def standardize(
             repos = [r for r in repos if fnmatch.fnmatch(r, pattern)]
         standardizer.stats["total"] = len(repos)
         standardizer.verify_all(repos)
-        raise typer.Exit(0)
+        raise typer.Exit(0) from None
 
     exit_code = standardizer.run(
         repo_filter=repo_filter,
