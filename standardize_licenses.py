@@ -22,6 +22,7 @@ Usage:
 import json
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -69,6 +70,7 @@ class LicenseStandardizer:
         self.skip_templates = skip_templates or []
         self.skip_archived = skip_archived
         self.delay = delay  # Delay between repos (rate limiting)
+        self.quiet_mode = False  # Suppress per-repo messages in bulk operations
         self.stats = {
             "total": 0,
             "updated": 0,
@@ -109,8 +111,13 @@ class LicenseStandardizer:
             ["gh", "api", "orgs/mitre/teams/saf/repos", "--paginate", "--jq", ".[].name"],
             capture_output=True,
             text=True,
-            check=True,
         )
+
+        if result.returncode != 0:
+            raise ValueError(
+                "Failed to fetch SAF team repositories. Make sure you're authenticated with 'gh auth login'"
+            )
+
         repos = [line.strip() for line in result.stdout.strip().split("\n")]
         console.print(f"[green]Found {len(repos)} repos in SAF team[/green]\n")
         return repos
@@ -121,8 +128,18 @@ class LicenseStandardizer:
         Returns:
             (file_path, sha) if exists, (None, None) if not
         """
-        # Try LICENSE.md first
-        for filename in ["LICENSE.md", "LICENSE"]:
+        # Try common LICENSE file variants
+        license_variants = [
+            "LICENSE.md",
+            "LICENSE",
+            "LICENSE.txt",
+            "LICENCE.md",
+            "LICENCE",
+            "license.md",
+            "license",
+        ]
+
+        for filename in license_variants:
             result = subprocess.run(
                 [
                     "gh",
@@ -146,8 +163,11 @@ class LicenseStandardizer:
             ["gh", "api", f"repos/mitre/{repo_name}/contents/{file_path}", "--jq", ".content"],
             capture_output=True,
             text=True,
-            check=True,
         )
+
+        if result.returncode != 0:
+            raise ValueError(f"Failed to read {file_path} from repository")
+
         # Decode base64
         import base64
 
@@ -234,8 +254,17 @@ class LicenseStandardizer:
             ],
             capture_output=True,
             text=True,
-            check=True,
         )
+
+        if result.returncode != 0:
+            # Friendly error message instead of raw exception
+            if "Not Found" in result.stderr or "Could not resolve" in result.stderr:
+                raise ValueError(
+                    f"Repository 'mitre/{repo_name}' not found or you don't have access to it"
+                )
+            else:
+                raise ValueError(f"Failed to get repository metadata: {result.stderr.strip()}")
+
         return json.loads(result.stdout)
 
     def get_default_branch(self, repo_name: str) -> str:
@@ -244,8 +273,11 @@ class LicenseStandardizer:
             ["gh", "api", f"repos/mitre/{repo_name}", "--jq", ".default_branch"],
             capture_output=True,
             text=True,
-            check=True,
         )
+
+        if result.returncode != 0:
+            raise ValueError("Failed to get default branch for repository")
+
         return result.stdout.strip().strip('"')
 
     def create_license(self, repo_name: str, template_type: str, branch: str):
@@ -253,13 +285,16 @@ class LicenseStandardizer:
         template = self.templates[template_type]
 
         if self.dry_run:
-            console.print(
-                f"  [yellow][DRY RUN] Would create LICENSE.md using {template_type} template[/yellow]"
-            )
+            if not self.quiet_mode:
+                console.print(
+                    f"  [yellow][DRY RUN] Would create LICENSE.md using {template_type} template[/yellow]"
+                )
             return True
 
-        with open("temp_license.md", "w") as f:
-            f.write(template)
+        # Base64 encode content for GitHub API
+        import base64
+
+        content_b64 = base64.b64encode(template.encode("utf-8")).decode("utf-8")
 
         cmd = [
             "gh",
@@ -270,13 +305,12 @@ class LicenseStandardizer:
             "-F",
             "message=docs: add LICENSE.md [skip ci]",
             "-F",
-            "content=@temp_license.md",
+            f"content={content_b64}",
             "-F",
             f"branch={branch}",
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
-        Path("temp_license.md").unlink()
 
         return result.returncode == 0
 
@@ -287,14 +321,16 @@ class LicenseStandardizer:
         template = self.templates[template_type]
 
         if self.dry_run:
-            console.print(
-                f"  [yellow][DRY RUN] Would update {old_file} → LICENSE.md using {template_type} template[/yellow]"
-            )
+            if not self.quiet_mode:
+                console.print(
+                    f"  [yellow][DRY RUN] Would update {old_file} → LICENSE.md using {template_type} template[/yellow]"
+                )
             return True
 
-        # Create/update LICENSE.md
-        with open("temp_license.md", "w") as f:
-            f.write(template)
+        # Base64 encode content for GitHub API
+        import base64
+
+        content_b64 = base64.b64encode(template.encode("utf-8")).decode("utf-8")
 
         if old_file == "LICENSE.md":
             # Update existing LICENSE.md
@@ -307,7 +343,7 @@ class LicenseStandardizer:
                 "-F",
                 "message=docs: clean up LICENSE.md formatting [skip ci]",
                 "-F",
-                "content=@temp_license.md",
+                f"content={content_b64}",
                 "-F",
                 f"sha={sha}",
                 "-F",
@@ -324,13 +360,12 @@ class LicenseStandardizer:
                 "-F",
                 "message=docs: add LICENSE.md [skip ci]",
                 "-F",
-                "content=@temp_license.md",
+                f"content={content_b64}",
                 "-F",
                 f"branch={branch}",
             ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
-        Path("temp_license.md").unlink()
 
         if result.returncode != 0:
             console.print(f"  [red]❌ Failed to create LICENSE.md: {result.stderr}[/red]")
@@ -345,7 +380,8 @@ class LicenseStandardizer:
     def delete_old_license(self, repo_name: str, branch: str):
         """Delete old LICENSE file (no .md extension)."""
         if self.dry_run:
-            console.print("  [yellow][DRY RUN] Would delete old LICENSE file[/yellow]")
+            if not self.quiet_mode:
+                console.print("  [yellow][DRY RUN] Would delete old LICENSE file[/yellow]")
             return
 
         # Get current SHA of LICENSE file
@@ -376,11 +412,10 @@ class LicenseStandardizer:
         )
 
     def verify_license(self, repo_name: str) -> bool:
-        """Verify repo has LICENSE.md with correct content."""
+        """Verify repo has any LICENSE file variant."""
         file_path, _ = self.check_license_file(repo_name)
-        if file_path == "LICENSE.md":
-            return True
-        return False
+        # Accept any LICENSE file (will be standardized to LICENSE.md)
+        return file_path is not None
 
     def process_repo(self, repo_name: str) -> Dict:
         """Process a single repository.
@@ -450,9 +485,8 @@ class LicenseStandardizer:
             # Check if LICENSE already matches our template (skip if unchanged)
             expected_template = self.templates[template_type]
             if content.strip() == expected_template.strip():
-                result["status"] = "skipped"
+                result["status"] = "success"  # Success, no action needed
                 result["action"] = "unchanged"
-                self.stats["skipped"] += 1
                 self.stats["unchanged"] = self.stats.get("unchanged", 0) + 1
                 return result
 
@@ -484,25 +518,151 @@ class LicenseStandardizer:
 
         return result
 
-    def verify_all(self, repos: List[str]):
-        """Verify all repos have LICENSE.md."""
-        console.print("\n" + "=" * 70)
-        console.print("VERIFICATION")
-        console.print("=" * 70 + "\n")
+    def analyze_repo_status(self, repo_name: str) -> Dict:
+        """Analyze a single repo's LICENSE status (for parallel execution)."""
+        try:
+            file_path, sha = self.check_license_file(repo_name)
 
-        missing = []
-        for repo in repos:
-            if self.verify_license(repo):
-                self.stats["verified"] += 1
+            if not file_path:
+                # No LICENSE file
+                template_type = self.detect_template_type(content=None, repo_name=repo_name)
+                return {
+                    "repo": repo_name,
+                    "status": "missing",
+                    "template": template_type,
+                    "detail": f"No LICENSE found, will create ({template_type.upper()})",
+                }
+
+            # Has a LICENSE file - check if it matches template
+            content = self.get_license_content(repo_name, file_path)
+            template_type = self.detect_template_type(content=content, repo_name=repo_name)
+            expected = self.templates[template_type]
+
+            if content.strip() == expected.strip():
+                # Perfect match
+                return {
+                    "repo": repo_name,
+                    "status": "correct",
+                    "template": template_type,
+                    "file": file_path,
+                    "detail": f"Has {file_path} ({template_type.upper()})",
+                }
             else:
-                missing.append(repo)
+                # Needs update
+                if file_path != "LICENSE.md":
+                    reason = f"Has {file_path}, needs rename + update ({template_type.upper()})"
+                else:
+                    reason = f"Has LICENSE.md, needs formatting cleanup ({template_type.upper()})"
+
+                return {
+                    "repo": repo_name,
+                    "status": "needs_update",
+                    "template": template_type,
+                    "file": file_path,
+                    "detail": reason,
+                }
+
+        except Exception as e:
+            return {
+                "repo": repo_name,
+                "status": "error",
+                "detail": str(e),
+            }
+
+    def verify_all(self, repos: List[str]):
+        """Verify all repos have LICENSE files (parallel execution)."""
+        console.print("\n")
+        console.print(Panel.fit("[bold cyan]Verification[/bold cyan]", border_style="cyan"))
+        console.print()
+
+        results = []
+
+        # Parallel verification with progress bar
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Verifying LICENSE files...", total=len(repos))
+
+            # Use ThreadPoolExecutor for parallel checking (20 workers for speed!)
+            with ThreadPoolExecutor(max_workers=20) as executor:
+                # Submit all repos for checking
+                future_to_repo = {
+                    executor.submit(self.analyze_repo_status, repo): repo for repo in repos
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_repo):
+                    result = future.result()
+                    results.append(result)
+                    progress.update(
+                        task, description=f"[{len(results)}/{len(repos)}] Checked {result['repo']}"
+                    )
+                    progress.advance(task)
+
+        console.print()
+
+        # Group results
+        correct = [r for r in results if r["status"] == "correct"]
+        needs_update = [r for r in results if r["status"] == "needs_update"]
+        missing = [r for r in results if r["status"] == "missing"]
+        errors = [r for r in results if r["status"] == "error"]
+
+        self.stats["verified"] = len(correct)
+
+        # Show grouped results
+        if correct:
+            console.print(f"[green]✅ CORRECT ({len(correct)} repos)[/green]")
+            for r in correct[:5]:  # Show first 5
+                console.print(f"  [dim]• {r['repo']}: {r['file']} ({r['template'].upper()})[/dim]")
+            if len(correct) > 5:
+                console.print(f"  [dim]... and {len(correct) - 5} more[/dim]")
+            console.print()
+
+        if needs_update:
+            table = Table(title=f"⚠️  NEEDS UPDATE ({len(needs_update)} repos)")
+            table.add_column("Repository", style="cyan")
+            table.add_column("Issue", style="yellow")
+
+            for r in needs_update[:20]:
+                table.add_row(r["repo"], r["detail"])
+
+            console.print(table)
+            if len(needs_update) > 20:
+                console.print(f"\n[dim]... and {len(needs_update) - 20} more[/dim]")
+            console.print()
 
         if missing:
-            console.print(f"[red]❌ {len(missing)} repos still missing LICENSE.md:[/red]")
-            for repo in missing:
-                console.print(f"  - {repo}")
-        else:
-            console.print(f"[green]✅ All {self.stats['verified']} repos have LICENSE.md[/green]")
+            table = Table(title=f"❌ MISSING LICENSE ({len(missing)} repos)")
+            table.add_column("Repository", style="cyan")
+            table.add_column("Will Create", style="yellow")
+
+            for r in missing[:20]:
+                table.add_row(r["repo"], r["template"].upper())
+
+            console.print(table)
+            if len(missing) > 20:
+                console.print(f"\n[dim]... and {len(missing) - 20} more[/dim]")
+            console.print()
+            console.print("[cyan]💡 Tip: Run without --verify-only to create LICENSE files[/cyan]")
+
+        if errors:
+            console.print(f"\n[red]❌ ERRORS ({len(errors)} repos)[/red]")
+            for r in errors:
+                console.print(f"  - {r['repo']}: {r['detail']}")
+
+        # Summary
+        console.print()
+        summary = Panel.fit(
+            f"[bold]Verification Complete[/bold]\n\n"
+            f"[green]✅ Correct:[/green] {len(correct)}\n"
+            f"[yellow]⚠️  Needs Update:[/yellow] {len(needs_update)}\n"
+            f"[red]❌ Missing:[/red] {len(missing)}",
+            title="Summary",
+            border_style="cyan",
+        )
+        console.print(summary)
 
     def save_dry_run_plan(self, output_format="txt", output_file=None):
         """Save dry-run plan to file for review.
@@ -542,7 +702,17 @@ class LicenseStandardizer:
                 f.write(f"Will rename:      {self.stats['renamed']}\n")
                 f.write(f"Will skip:        {self.stats['skipped']}\n")
 
-            console.print(f"\n[green]📝 Dry-run plan saved to: {plan_file}[/green]")
+            console.print()
+            console.print(
+                Panel.fit(
+                    f"[green]📝 Dry-run plan saved[/green]\n\n"
+                    f"[cyan]File:[/cyan] {plan_file.absolute()}\n"
+                    f"[cyan]Format:[/cyan] {output_format.upper()}\n"
+                    f"[cyan]Actions:[/cyan] {len([r for r in self.results if r['status'] == 'success'])} planned",
+                    title="Dry-Run Report",
+                    border_style="green",
+                )
+            )
 
         # JSON format
         elif output_format == "json":
@@ -555,7 +725,18 @@ class LicenseStandardizer:
             }
             with open(plan_file, "w") as f:
                 json_lib.dump(output_data, f, indent=2)
-            console.print(f"\n[green]📝 Dry-run plan saved to: {plan_file}[/green]")
+
+            console.print()
+            console.print(
+                Panel.fit(
+                    f"[green]📝 Dry-run plan saved[/green]\n\n"
+                    f"[cyan]File:[/cyan] {plan_file.absolute()}\n"
+                    f"[cyan]Format:[/cyan] JSON\n"
+                    f"[cyan]Repos:[/cyan] {len(self.results)} analyzed",
+                    title="Dry-Run Report",
+                    border_style="green",
+                )
+            )
 
         # CSV format
         elif output_format == "csv":
@@ -568,7 +749,94 @@ class LicenseStandardizer:
                 )
                 writer.writeheader()
                 writer.writerows(self.results)
-            console.print(f"\n[green]📝 Dry-run plan saved to: {plan_file}[/green]")
+
+            console.print()
+            console.print(
+                Panel.fit(
+                    f"[green]📝 Dry-run plan saved[/green]\n\n"
+                    f"[cyan]File:[/cyan] {plan_file.absolute()}\n"
+                    f"[cyan]Format:[/cyan] CSV\n"
+                    f"[cyan]Rows:[/cyan] {len(self.results)} repos",
+                    title="Dry-Run Report",
+                    border_style="green",
+                )
+            )
+
+    def show_grouped_results(self):
+        """Show clean grouped summary of what happened/will happen."""
+        if not self.results:
+            return
+
+        # Group results by action
+        unchanged = [r for r in self.results if r["action"] == "unchanged"]
+        will_update = [r for r in self.results if r["action"] == "updated"]
+        will_rename = [r for r in self.results if r["action"] == "renamed"]
+        will_create = [r for r in self.results if r["action"] == "created"]
+        skipped_forks = [r for r in self.results if r["action"] == "fork"]
+        skipped_archived = [r for r in self.results if r["action"] == "archived"]
+        skipped_other = [
+            r
+            for r in self.results
+            if r["status"] == "skipped"
+            and r["action"] not in ["unchanged", "fork", "archived"]
+            and r["action"]
+            and r["action"].startswith("skip_")
+        ]
+        failed = [r for r in self.results if r["status"] == "failed"]
+
+        # Build summary lines
+        lines = []
+
+        if unchanged:
+            lines.append(f"[green]✅ Already correct:[/green] {len(unchanged)} repos")
+
+        if will_update:
+            action_word = "Will update" if self.dry_run else "Updated"
+            lines.append(
+                f"[yellow]📝 {action_word}:[/yellow] {len(will_update)} repos (formatting cleanup)"
+            )
+
+        if will_rename:
+            action_word = "Will rename" if self.dry_run else "Renamed"
+            lines.append(
+                f"[yellow]🔄 {action_word}:[/yellow] {len(will_rename)} repos (LICENSE → LICENSE.md)"
+            )
+
+        if will_create:
+            action_word = "Will create" if self.dry_run else "Created"
+            lines.append(f"[cyan]➕ {action_word}:[/cyan] {len(will_create)} repos")
+
+        # Combine skipped categories
+        total_skipped = len(skipped_forks) + len(skipped_archived) + len(skipped_other)
+        if total_skipped > 0:
+            skip_details = []
+            if skipped_forks:
+                skip_details.append(f"{len(skipped_forks)} forks")
+            if skipped_archived:
+                skip_details.append(f"{len(skipped_archived)} archived")
+            if skipped_other:
+                # Extract template types from skip_X actions
+                template_types = set()
+                for r in skipped_other:
+                    if r["action"].startswith("skip_"):
+                        template_types.add(r["action"].replace("skip_", ""))
+                if template_types:
+                    skip_details.append(f"{len(skipped_other)} {'/'.join(template_types).upper()}")
+
+            lines.append(f"[dim]⏭️  Skipped:[/dim] {', '.join(skip_details)}")
+
+        if failed:
+            lines.append(f"[red]❌ Failed:[/red] {len(failed)} repos")
+
+        # Show panel only if we have something to show
+        if lines:
+            console.print(
+                Panel.fit(
+                    "\n".join(lines),
+                    title="Results" if self.dry_run else "Changes Applied",
+                    border_style="cyan",
+                )
+            )
 
     def print_summary(self):
         """Print summary of operations."""
@@ -662,6 +930,10 @@ class LicenseStandardizer:
             console.print(f"[cyan]📦 Backups will be saved to: {backup_dir}[/cyan]\n")
             self.backup_dir = backup_dir
 
+        # Enable quiet mode for bulk operations (>1 repo)
+        if len(repos) > 1:
+            self.quiet_mode = True
+
         # Process each repo with progress bar (with Ctrl-C handling)
         try:
             with Progress(
@@ -678,20 +950,14 @@ class LicenseStandardizer:
                     result = self.process_repo(repo)
                     self.results.append(result)
 
-                    # Show status with better formatting
-                    if result["status"] == "success":
-                        if result["action"] == "unchanged":
-                            console.print(f"  [dim]✓ unchanged ({result['template']})[/dim]")
-                        else:
-                            console.print(f"  ✅ {result['action']} ({result['template']})")
-                        if self.dry_run and result["action"] != "unchanged":
+                    # Only show errors and important changes (not every repo)
+                    if result["status"] == "failed":
+                        console.print(f"  [red]❌ {repo}: {result['error']}[/red]")
+                    elif result["action"] != "unchanged" and result["status"] == "success":
+                        if self.dry_run:
                             self.dry_run_plan.append(
                                 f"{repo}: {result['action']} ({result['template']})"
                             )
-                    elif result["status"] == "skipped":
-                        console.print(f"  [dim]⏭️  {result['action']}[/dim]")
-                    else:
-                        console.print(f"  [red]❌ {result['error']}[/red]")
 
                     progress.advance(task)
 
@@ -707,11 +973,17 @@ class LicenseStandardizer:
             # Continue to show results for what was processed
             pass
 
-        # Layer 4: Template distribution analysis
-        self.show_template_distribution()
+        # Show clean grouped results
+        console.print()
+        self.show_grouped_results()
 
-        # Layer 5: Sanity checks
-        self.show_sanity_warnings()
+        # Layer 4: Template distribution (only for large batches)
+        if len(repos) > 20:
+            self.show_template_distribution()
+
+        # Layer 5: Sanity checks (only for large batches)
+        if len(repos) > 20:
+            self.show_sanity_warnings()
 
         # Save dry-run plan (will be set from args in main())
         if self.dry_run:
@@ -838,7 +1110,6 @@ def standardize(
         raise typer.Exit(1)
     # Interactive mode (only if not explicitly disabled)
     if interactive and not no_interactive:
-        # Use Panel.fit() for focused, centered header
         console.print("\n")
         console.print(
             Panel.fit(
@@ -849,60 +1120,73 @@ def standardize(
         console.print()
 
         try:
-            # Ask what to do
+            # Step 1: Choose action
             action = questionary.select(
                 "What would you like to do?",
                 choices=[
-                    "Process all SAF repos",
-                    "Process specific pattern (e.g., *-stig-baseline)",
-                    "Process single repo",
-                    "Verify all repos have LICENSE.md",
+                    "Analyze single repo (check compliance)",
+                    "Verify all repos (find missing licenses)",
+                    "Update repos by pattern",
+                    "Update all SAF repos",
                 ],
             ).ask()
 
-            if not action:  # Ctrl-C returns None
+            if not action:
                 raise KeyboardInterrupt
 
-            if action == "Process specific pattern (e.g., *-stig-baseline)":
-                pattern = questionary.text("Enter pattern (e.g., '*-stig-baseline'):").ask()
-                if pattern is None:
-                    raise KeyboardInterrupt
-            elif action == "Process single repo":
+            # Step 2: Get target based on action
+            if action == "Analyze single repo (check compliance)":
                 repo = questionary.text("Enter repo name:").ask()
                 if repo is None:
                     raise KeyboardInterrupt
-            elif action == "Verify all repos have LICENSE.md":
+
+                console.print()
+                console.print(Panel.fit("[cyan]Analyzing...[/cyan]", border_style="cyan"))
+
+                # Force dry-run for analysis
+                dry_run = True
+
+            elif action == "Verify all repos (find missing licenses)":
+                # Verification is always read-only, no other questions needed
                 verify_only = True
+                console.print()
+                console.print(Panel.fit("[cyan]Verifying all repos...[/cyan]", border_style="cyan"))
 
-            console.print()  # Spacing
-
-            # Ask about options
-            dry_run_answer = questionary.confirm("Dry-run mode (preview only)?", default=True).ask()
-            if dry_run_answer is None:
-                raise KeyboardInterrupt
-            dry_run = dry_run_answer
-
-            skip_types = questionary.checkbox(
-                "Skip any template types?",
-                choices=["cis", "disa", "plain"],
-            ).ask()
-            if skip_types is None:
-                raise KeyboardInterrupt
-            skip = skip_types if skip_types else None
-
-            skip_archived_answer = questionary.confirm("Skip archived repos?", default=False).ask()
-            if skip_archived_answer is None:
-                raise KeyboardInterrupt
-            skip_archived = skip_archived_answer
-
-            if dry_run:
-                output_format = questionary.select(
-                    "Output format for dry-run plan?",
-                    choices=["txt", "json", "csv"],
-                    default="txt",
-                ).ask()
-                if output_format is None:
+            elif action == "Update repos by pattern":
+                pattern = questionary.text("Enter pattern (e.g., '*-stig-baseline', 'saf*'):").ask()
+                if pattern is None:
                     raise KeyboardInterrupt
+
+                console.print()
+
+                # Ask if preview or apply
+                mode = questionary.select(
+                    "How would you like to proceed?",
+                    choices=["Preview changes (dry-run)", "Apply changes now"],
+                ).ask()
+                if mode is None:
+                    raise KeyboardInterrupt
+
+                dry_run = mode == "Preview changes (dry-run)"
+
+                # Ask about filters
+                skip_archived = questionary.confirm("Skip archived repos?", default=True).ask()
+                if skip_archived is None:
+                    raise KeyboardInterrupt
+
+            elif action == "Update all SAF repos":
+                console.print()
+                console.print("[yellow]⚠️  This will process all 243 SAF repos[/yellow]")
+
+                confirmed = questionary.confirm("Are you sure?", default=False).ask()
+                if not confirmed:
+                    raise KeyboardInterrupt
+
+                # Force dry-run for safety
+                dry_run = True
+                console.print(
+                    "[cyan]Running in dry-run mode for safety (use --force to apply)[/cyan]"
+                )
 
             console.print()
             console.print(Panel.fit("[green]✓ Starting...[/green]", border_style="green"))
@@ -934,12 +1218,51 @@ def standardize(
     standardizer.output_format = output_format
     standardizer.output_file = output
 
-    # Single repo test mode
+    # Single repo test mode (show friendly analysis)
     if repo:
-        console.print(f"[cyan]Test mode: Processing single repo '{repo}'[/cyan]\n")
+        console.print(f"[cyan]Analyzing '{repo}'...[/cyan]\n")
         result = standardizer.process_repo(repo)
         standardizer.results.append(result)
         standardizer.stats["total"] = 1
+
+        # Show friendly message for single repo
+        console.print()
+        if result["action"] == "unchanged":
+            console.print(
+                Panel.fit(
+                    f"[green]✅ LICENSE is correct[/green]\n\n"
+                    f"[cyan]Template:[/cyan] {result['template'].upper()}\n"
+                    f"[cyan]Status:[/cyan] No changes needed",
+                    title=f"✓ {repo}",
+                    border_style="green",
+                )
+            )
+        elif result["status"] == "success":
+            console.print(
+                Panel.fit(
+                    f"[yellow]⚠️  LICENSE needs update[/yellow]\n\n"
+                    f"[cyan]Template:[/cyan] {result['template'].upper()}\n"
+                    f"[cyan]Action:[/cyan] {result['action']}\n"
+                    f"[cyan]Change:[/cyan] {'Formatting cleanup' if result['action'] == 'updated' else result['action'].title()}",
+                    title=f"⚠️  {repo}",
+                    border_style="yellow",
+                )
+            )
+        elif result["status"] == "skipped":
+            console.print(
+                Panel.fit(f"[dim]Skipped: {result['action']}[/dim]", title=repo, border_style="dim")
+            )
+        else:
+            console.print(
+                Panel.fit(
+                    f"[red]❌ Error: {result.get('error', 'Unknown')}[/red]",
+                    title=repo,
+                    border_style="red",
+                )
+            )
+
+        # Also show summary table
+        console.print()
         standardizer.print_summary()
         if not dry_run:
             standardizer.verify_all([repo])

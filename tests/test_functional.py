@@ -87,12 +87,12 @@ class TestLicenseStandardizerFunctional:
     def test_creates_license_for_repo_without_one(self, mock_gh_api):
         """Test that LICENSE.md is created for repos without license."""
         # Mock metadata and no license file
+        # Mock: metadata + all 7 license variants return 404
         mock_gh_api.side_effect = [
             Mock(
                 returncode=0, stdout='{"fork": false, "archived": false, "default_branch": "main"}'
             ),
-            Mock(returncode=1),  # LICENSE.md doesn't exist
-            Mock(returncode=1),  # LICENSE doesn't exist
+            *[Mock(returncode=1) for _ in range(7)],  # All license variants don't exist
         ]
 
         standardizer = LicenseStandardizer(dry_run=True)

@@ -85,4 +85,4 @@ class TestCLIWithMocks:
 
         result = runner.invoke(app, ["--verify-only"])
         assert result.exit_code == 0
-        assert "VERIFICATION" in result.output or "verify" in result.output.lower()
+        assert "verif" in result.output.lower()  # Matches "Verification" or "verify"
