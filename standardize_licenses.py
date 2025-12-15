@@ -438,6 +438,12 @@ class LicenseStandardizer:
             template_type = self.detect_template_type(content=content, repo_name=repo_name)
             result["template"] = template_type
 
+            # Layer 3: Backup original LICENSE if enabled
+            if hasattr(self, "backup_dir") and self.backup_dir:
+                backup_file = self.backup_dir / f"{repo_name}.{file_path}"
+                backup_file.write_text(content)
+                console.print(f"  [dim]📦 Backed up to {backup_file.name}[/dim]")
+
             # Check if should skip this template type
             if template_type in self.skip_templates:
                 result["status"] = "skipped"
@@ -586,6 +592,8 @@ class LicenseStandardizer:
         repo_filter: Optional[str] = None,
         pattern: Optional[str] = None,
         resume_from: Optional[str] = None,
+        force: bool = False,
+        backup_enabled: bool = True,
     ):
         """Run standardization on all repos."""
         # Get repos
@@ -612,6 +620,26 @@ class LicenseStandardizer:
                 return 1
 
         self.stats["total"] = len(repos)
+
+        # Layer 2: Bulk confirmation - require confirmation for large batches
+        if len(repos) > 10 and not self.dry_run and not force:
+            console.print(f"\n[yellow]⚠️  About to update {len(repos)} repositories[/yellow]")
+            confirmed = questionary.confirm(
+                f"This will modify {len(repos)} repos. Continue?",
+                default=False,
+            ).ask()
+
+            if not confirmed:
+                console.print("[yellow]Cancelled by user[/yellow]")
+                return 0
+
+        # Layer 3: Create backup directory if enabled
+        backup_dir = None
+        if backup_enabled and not self.dry_run:
+            backup_dir = Path("backups") / datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            console.print(f"[cyan]📦 Backups will be saved to: {backup_dir}[/cyan]\n")
+            self.backup_dir = backup_dir
 
         # Process each repo with progress bar
         with Progress(
@@ -642,6 +670,12 @@ class LicenseStandardizer:
                 if i < len(repos) and not self.dry_run:
                     time.sleep(self.delay)
 
+        # Layer 4: Template distribution analysis
+        self.show_template_distribution()
+
+        # Layer 5: Sanity checks
+        self.show_sanity_warnings()
+
         # Save dry-run plan (will be set from args in main())
         if self.dry_run:
             self.save_dry_run_plan(
@@ -657,6 +691,64 @@ class LicenseStandardizer:
             self.verify_all(repos)
 
         return 0 if self.stats["failed"] == 0 else 1
+
+    def show_template_distribution(self):
+        """Layer 4: Show template type distribution."""
+        # Count by template type
+        template_counts = {"cis": 0, "disa": 0, "plain": 0}
+        for r in self.results:
+            if r.get("template") and r["status"] == "success":
+                template_counts[r["template"]] += 1
+
+        if sum(template_counts.values()) == 0:
+            return
+
+        table = Table(title="Template Distribution")
+        table.add_column("Template Type", style="cyan")
+        table.add_column("Count", style="green", justify="right")
+        table.add_column("Percentage", style="yellow", justify="right")
+
+        total = sum(template_counts.values())
+        for tmpl, count in template_counts.items():
+            if count > 0:
+                pct = (count / total) * 100
+                table.add_row(tmpl.upper(), str(count), f"{pct:.1f}%")
+
+        console.print("\n")
+        console.print(table)
+
+    def show_sanity_warnings(self):
+        """Layer 5: Show sanity check warnings."""
+        warnings = []
+
+        total_processed = len([r for r in self.results if r["status"] != "skipped"])
+        if total_processed == 0:
+            return
+
+        # Check 1: All same template type (suspicious)
+        template_types = set(r.get("template") for r in self.results if r.get("template"))
+        if len(template_types) == 1 and total_processed > 5:
+            warnings.append(f"⚠️  All {total_processed} repos detected as same template type ({list(template_types)[0].upper()})")
+
+        # Check 2: Too many creates (>50%)
+        creates = self.stats.get("created", 0)
+        if creates > 0 and total_processed > 5:
+            create_pct = (creates / total_processed) * 100
+            if create_pct > 50:
+                warnings.append(f"⚠️  {create_pct:.0f}% of repos need LICENSE created (expected <50%)")
+
+        # Check 3: Too many forks (>30%)
+        forks = self.stats.get("forks", 0)
+        total_checked = self.stats.get("total", 0)
+        if forks > 0 and total_checked > 10:
+            fork_pct = (forks / total_checked) * 100
+            if fork_pct > 30:
+                warnings.append(f"⚠️  {fork_pct:.0f}% of repos are forks (might have selected wrong team)")
+
+        if warnings:
+            console.print("\n[yellow bold]⚠️  SANITY CHECK WARNINGS:[/yellow bold]")
+            for warning in warnings:
+                console.print(f"[yellow]{warning}[/yellow]")
 
 
 @app.command()
@@ -771,7 +863,11 @@ def standardize(
         raise typer.Exit(0)
 
     exit_code = standardizer.run(
-        repo_filter=repo_filter, pattern=pattern, resume_from=resume_from
+        repo_filter=repo_filter,
+        pattern=pattern,
+        resume_from=resume_from,
+        force=force,
+        backup_enabled=backup,
     )
     raise typer.Exit(exit_code)
 
