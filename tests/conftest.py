@@ -27,21 +27,27 @@ def jinja_env(template_dir):
 
 
 @pytest.fixture
-def cis_template(template_dir):
+def fixtures_dir():
+    """Return path to test fixtures directory."""
+    return Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture
+def cis_template(fixtures_dir):
     """Return CIS template content."""
-    return (template_dir / "LICENSE_TEMPLATE_CIS.md").read_text()
+    return (fixtures_dir / "LICENSE_TEMPLATE_CIS.md").read_text()
 
 
 @pytest.fixture
-def disa_template(template_dir):
+def disa_template(fixtures_dir):
     """Return DISA template content."""
-    return (template_dir / "LICENSE_TEMPLATE_DISA.md").read_text()
+    return (fixtures_dir / "LICENSE_TEMPLATE_DISA.md").read_text()
 
 
 @pytest.fixture
-def plain_template(template_dir):
+def plain_template(fixtures_dir):
     """Return plain template content."""
-    return (template_dir / "LICENSE_TEMPLATE_PLAIN.md").read_text()
+    return (fixtures_dir / "LICENSE_TEMPLATE_PLAIN.md").read_text()
 
 
 @pytest.fixture

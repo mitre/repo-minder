@@ -1,8 +1,8 @@
 # License
 
-Copyright © 2025 The MITRE Corporation.
+Copyright © {{ year }} The MITRE Corporation.
 
-Approved for Public Release; Distribution Unlimited. Case Number 18-3678.
+Approved for Public Release; Distribution Unlimited. Case Number {{ case_number }}.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may
 not use this file except in compliance with the License. You may obtain a
@@ -31,6 +31,7 @@ met:
 - Neither the name of The MITRE Corporation nor the names of its
   contributors may be used to endorse or promote products derived from
   this software without specific prior written permission.
+{% block third_party_before_notice %}{% endblock %}
 
 ## Notice
 
@@ -48,8 +49,4 @@ written permission of The MITRE Corporation.
 For further information, please contact The MITRE Corporation, Contracts
 Management Office, 7515 Colshire Drive, McLean, VA 22102-7539, (703)
 983-6000.
-
-## Third-Party Content
-
-DISA STIGs are published by DISA IASE, see:
-https://iase.disa.mil/Pages/privacy_policy.aspx
+{% block third_party_after_notice %}{% endblock %}

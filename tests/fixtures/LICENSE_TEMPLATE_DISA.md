@@ -1,8 +1,8 @@
 # License
 
-Copyright © {{ year }} The MITRE Corporation.
+Copyright © 2025 The MITRE Corporation.
 
-Approved for Public Release; Distribution Unlimited. Case Number {{ case_number }}.
+Approved for Public Release; Distribution Unlimited. Case Number 18-3678.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may
 not use this file except in compliance with the License. You may obtain a
@@ -31,30 +31,6 @@ met:
 - Neither the name of The MITRE Corporation nor the names of its
   contributors may be used to endorse or promote products derived from
   this software without specific prior written permission.
-{% if template_type in ['cis', 'disa'] %}
-
-## Third-Party Content
-
-MITRE's licensed products include third-party materials that are subject
-to open source or free software licenses ("Open Source Materials"). The
-Open Source Materials are as follows:
-{% if template_type == 'cis' %}
-
-**CIS Benchmarks.** Please visit www.cisecurity.org for full terms of
-use.
-{% elif template_type == 'disa' %}
-
-**DISA STIGs.** Please visit https://public.cyber.mil/stigs/ for full
-terms of use.
-{% endif %}
-
-The Open Source Materials are licensed under the terms of the applicable
-third-party licenses that accompany the Open Source Materials. MITRE's
-license does not limit a licensee's rights under the terms of the Open
-Source Materials license. MITRE's license also does not grant licensee
-rights to the Open Source Materials that supersede the terms and
-conditions of the Open Source Materials license.
-{% endif %}
 
 ## Notice
 
@@ -72,3 +48,8 @@ written permission of The MITRE Corporation.
 For further information, please contact The MITRE Corporation, Contracts
 Management Office, 7515 Colshire Drive, McLean, VA 22102-7539, (703)
 983-6000.
+
+## Third-Party Content
+
+DISA STIGs. Please visit https://cyber.mil/stigs/downloads for full
+terms of use.

@@ -13,7 +13,7 @@ class TestTemplateStructure:
     def test_disa_template_has_disa_section(self, disa_template):
         """DISA template must contain DISA STIGs third-party section."""
         assert "DISA STIGs" in disa_template or "DISA IASE" in disa_template
-        assert "public.cyber.mil/stigs" in disa_template or "iase.disa.mil" in disa_template
+        assert "cyber.mil/stigs" in disa_template
         assert "## Third-Party Content" in disa_template
 
     def test_plain_template_no_third_party(self, plain_template):

@@ -37,10 +37,6 @@ except ImportError:
 # Template paths
 SCRIPT_DIR = Path(__file__).parent
 TEMPLATES_DIR = SCRIPT_DIR / "templates"
-JINJA_TEMPLATE = TEMPLATES_DIR / "LICENSE.j2"
-TEMPLATE_CIS = TEMPLATES_DIR / "LICENSE_TEMPLATE_CIS.md"
-TEMPLATE_DISA = TEMPLATES_DIR / "LICENSE_TEMPLATE_DISA.md"
-TEMPLATE_PLAIN = TEMPLATES_DIR / "LICENSE_TEMPLATE_PLAIN.md"
 
 # Template variables
 TEMPLATE_VARS = {
@@ -72,24 +68,23 @@ class LicenseStandardizer:
         self.results = []
         self.dry_run_plan = []  # Store dry-run actions
 
-        # Load templates (prefer Jinja2 if available)
-        if HAS_JINJA2 and JINJA_TEMPLATE.exists():
-            env = Environment(
-                loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape()
-            )
-            jinja_template = env.get_template("LICENSE.j2")
-            self.templates = {
-                "cis": jinja_template.render(template_type="cis", **TEMPLATE_VARS),
-                "disa": jinja_template.render(template_type="disa", **TEMPLATE_VARS),
-                "plain": jinja_template.render(template_type="plain", **TEMPLATE_VARS),
-            }
-        else:
-            # Fallback to static templates
-            self.templates = {
-                "cis": TEMPLATE_CIS.read_text(),
-                "disa": TEMPLATE_DISA.read_text(),
-                "plain": TEMPLATE_PLAIN.read_text(),
-            }
+        # Load templates using Jinja2
+        if not HAS_JINJA2:
+            raise ImportError("Jinja2 is required. Install with: pip install jinja2")
+
+        env = Environment(
+            loader=FileSystemLoader(TEMPLATES_DIR),
+            autoescape=select_autoescape(),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
+
+        # Render each template type
+        self.templates = {
+            "cis": env.get_template("cis.j2").render(**TEMPLATE_VARS),
+            "disa": env.get_template("disa.j2").render(**TEMPLATE_VARS),
+            "plain": env.get_template("plain.j2").render(**TEMPLATE_VARS),
+        }
 
     def get_saf_repos(self) -> List[str]:
         """Get list of all SAF team repos via gh cli."""
@@ -697,10 +692,11 @@ def main():
 
     args = parser.parse_args()
 
-    # Verify templates exist
-    for template in [TEMPLATE_CIS, TEMPLATE_DISA, TEMPLATE_PLAIN]:
-        if not template.exists():
-            print(f"❌ Template not found: {template}")
+    # Verify Jinja2 templates exist
+    required_templates = ["base.j2", "cis.j2", "disa.j2", "plain.j2"]
+    for tmpl in required_templates:
+        if not (TEMPLATES_DIR / tmpl).exists():
+            print(f"❌ Template not found: {TEMPLATES_DIR / tmpl}")
             return 1
 
     # Run standardization
