@@ -605,27 +605,34 @@ class LicenseStandardizer:
 
         self.stats["total"] = len(repos)
 
-        # Process each repo
-        print("Processing repositories...\n")
-        for i, repo in enumerate(repos, 1):
-            print(f"[{i}/{len(repos)}] {repo}...", end=" ", flush=True)
-            result = self.process_repo(repo)
-            self.results.append(result)
+        # Process each repo with progress bar
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task(f"Processing {len(repos)} repositories...", total=len(repos))
 
-            # Print status
-            if result["status"] == "success":
-                action_msg = f"✅ {result['action']} ({result['template']})"
-                print(action_msg)
-                if self.dry_run:
-                    self.dry_run_plan.append(f"{repo}: {result['action']} ({result['template']})")
-            elif result["status"] == "skipped":
-                print(f"⏭️  {result['action']}")
-            else:
-                print(f"❌ {result['error']}")
+            for i, repo in enumerate(repos, 1):
+                progress.update(task, description=f"[{i}/{len(repos)}] {repo}")
+                result = self.process_repo(repo)
+                self.results.append(result)
 
-            # Rate limiting delay (except for last repo)
-            if i < len(repos) and not self.dry_run:
-                time.sleep(self.delay)
+                # Show status
+                if result["status"] == "success":
+                    console.print(f"  ✅ {result['action']} ({result['template']})")
+                    if self.dry_run:
+                        self.dry_run_plan.append(f"{repo}: {result['action']} ({result['template']})")
+                elif result["status"] == "skipped":
+                    console.print(f"  ⏭️  {result['action']}")
+                else:
+                    console.print(f"  [red]❌ {result['error']}[/red]")
+
+                progress.advance(task)
+
+                # Rate limiting delay
+                if i < len(repos) and not self.dry_run:
+                    time.sleep(self.delay)
 
         # Save dry-run plan (will be set from args in main())
         if self.dry_run:
