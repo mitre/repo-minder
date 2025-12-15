@@ -21,7 +21,6 @@ Usage:
 
 import json
 import logging
-import os
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -50,18 +49,69 @@ except ImportError:
 
 # Configuration with Pydantic Settings
 class Settings(BaseSettings):
-    """Application configuration loaded from environment variables or .env file."""
+    """Application configuration loaded from environment variables or .env file.
 
+    Configuration priority (highest to lowest):
+    1. CLI flags (--org, --team, etc.)
+    2. Environment variables (REPO_MINDER_ORGANIZATION, etc.)
+    3. .env file
+    4. Defaults
+    """
+
+    # GitHub Settings
     organization: str = Field(
         default="mitre", description="GitHub organization name (e.g., 'mitre', 'ansible-lockdown')"
     )
     team: str = Field(default="saf", description="GitHub team name within the organization")
+
+    # Performance Settings
+    delay: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=5.0,
+        description="Delay between API calls in seconds (0.0-5.0)",
+    )
+    max_workers: int = Field(
+        default=20,
+        ge=1,
+        le=50,
+        description="Maximum parallel workers for verification (1-50)",
+    )
+
+    # Path Settings
+    backup_dir: str = Field(default="backups", description="Directory to store LICENSE backups")
+    templates_dir: str = Field(
+        default="templates", description="Directory containing Jinja2 templates"
+    )
+
+    # Template Variables
+    case_number: str = Field(
+        default="18-3678", description="MITRE Approved for Public Release case number"
+    )
+    copyright_org: str = Field(
+        default="The MITRE Corporation", description="Copyright holder organization name"
+    )
+    copyright_year: int = Field(
+        default_factory=lambda: datetime.now().year,
+        description="Copyright year (defaults to current year)",
+    )
+
+    # Behavior Defaults
+    skip_archived: bool = Field(default=False, description="Default: skip archived repositories")
+    skip_forks: bool = Field(default=True, description="Default: skip forked repositories")
+
+    # Logging
     log_level: str = Field(
         default="INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)"
     )
 
+    # GitHub Authentication (optional - gh cli handles this)
+    github_token: Optional[str] = Field(
+        default=None, description="GitHub personal access token (optional)"
+    )
+
     model_config = SettingsConfigDict(
-        env_prefix="REPO_MINDER_",  # Reads REPO_MINDER_ORG, REPO_MINDER_TEAM, etc.
+        env_prefix="REPO_MINDER_",  # Reads REPO_MINDER_ORGANIZATION, etc.
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
@@ -89,15 +139,19 @@ app = typer.Typer(
     add_completion=False,
 )
 
-# Template paths
+# Template paths (use settings for custom location)
 SCRIPT_DIR = Path(__file__).parent
-TEMPLATES_DIR = SCRIPT_DIR / "templates"
+TEMPLATES_DIR = (
+    Path(settings.templates_dir)
+    if Path(settings.templates_dir).is_absolute()
+    else SCRIPT_DIR / settings.templates_dir
+)
 
-# Template variables
+# Template variables (from settings)
 TEMPLATE_VARS = {
-    "year": datetime.now().year,
-    "case_number": "18-3678",
-    "organization": "The MITRE Corporation",
+    "year": settings.copyright_year,
+    "case_number": settings.case_number,
+    "organization": settings.copyright_org,
 }
 
 
@@ -108,18 +162,20 @@ class RepoMinder:
         self,
         dry_run=False,
         skip_templates=None,
-        skip_archived=False,
-        delay=0.5,
+        skip_archived=None,
+        delay=None,
         organization=None,
         team=None,
+        max_workers=None,
     ):
         # Use provided values or fall back to global settings
         self.organization = organization or settings.organization
         self.team = team or settings.team
         self.dry_run = dry_run
         self.skip_templates = skip_templates or []
-        self.skip_archived = skip_archived
-        self.delay = delay  # Delay between repos (rate limiting)
+        self.skip_archived = skip_archived if skip_archived is not None else settings.skip_archived
+        self.delay = delay if delay is not None else settings.delay
+        self.max_workers = max_workers if max_workers is not None else settings.max_workers
         self.quiet_mode = False  # Suppress per-repo messages in bulk operations
         self.stats = {
             "total": 0,
@@ -655,8 +711,8 @@ class RepoMinder:
         ) as progress:
             task = progress.add_task("Verifying LICENSE files...", total=len(repos))
 
-            # Use ThreadPoolExecutor for parallel checking (20 workers for speed!)
-            with ThreadPoolExecutor(max_workers=20) as executor:
+            # Use ThreadPoolExecutor for parallel checking (configurable workers)
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 # Submit all repos for checking
                 future_to_repo = {
                     executor.submit(self.analyze_repo_status, repo): repo for repo in repos
@@ -995,7 +1051,7 @@ class RepoMinder:
         # Layer 3: Create backup directory if enabled
         backup_dir = None
         if backup_enabled and not self.dry_run:
-            backup_dir = Path("backups") / datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_dir = Path(settings.backup_dir) / datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_dir.mkdir(parents=True, exist_ok=True)
             console.print(f"[cyan]📦 Backups will be saved to: {backup_dir}[/cyan]\n")
             self.backup_dir = backup_dir

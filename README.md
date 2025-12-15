@@ -20,7 +20,8 @@ Repository file standardization and compliance tool for MITRE open-source projec
 pip install mitre-repo-minder
 
 # Or use with uv (development)
-uv run python standardize_licenses.py --repo saf --dry-run
+uv sync
+uv run python repo_minder.py --repo saf --dry-run
 
 # Test on single repo (dry-run)
 repo-minder --repo saf --dry-run
@@ -34,6 +35,70 @@ repo-minder --pattern '*-stig-baseline'
 # Interactive mode
 repo-minder --interactive
 ```
+
+## Configuration
+
+Repo Minder uses **Pydantic Settings** for type-safe configuration with multiple sources.
+
+### Configuration Priority
+
+Settings are loaded in this order (highest priority first):
+1. **CLI flags** (`--org mitre`, `--team saf`)
+2. **Environment variables** (`REPO_MINDER_ORGANIZATION=mitre`)
+3. **.env file** (see `.env.example`)
+4. **Built-in defaults**
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and customize:
+
+```bash
+# GitHub Settings
+REPO_MINDER_ORGANIZATION=mitre      # GitHub org
+REPO_MINDER_TEAM=saf                # Team name
+
+# Performance
+REPO_MINDER_DELAY=0.5               # API rate limit delay (0.0-5.0 seconds)
+REPO_MINDER_MAX_WORKERS=20          # Parallel workers (1-50)
+
+# Paths
+REPO_MINDER_BACKUP_DIR=backups      # Backup location
+REPO_MINDER_TEMPLATES_DIR=templates # Template location
+
+# Template Variables
+REPO_MINDER_CASE_NUMBER=18-3678                      # MITRE case number
+REPO_MINDER_COPYRIGHT_ORG=The MITRE Corporation      # Copyright holder
+REPO_MINDER_COPYRIGHT_YEAR=2025                      # Copyright year
+
+# Behavior
+REPO_MINDER_SKIP_ARCHIVED=false     # Skip archived repos
+REPO_MINDER_SKIP_FORKS=true         # Skip forks (recommended)
+
+# Logging
+REPO_MINDER_LOG_LEVEL=INFO          # DEBUG, INFO, WARNING, ERROR
+```
+
+### CLI Flag Overrides
+
+All settings can be overridden via CLI flags:
+
+```bash
+# Use different org/team
+repo-minder --org ansible-lockdown --team developers --verify-only
+
+# Adjust performance
+repo-minder --delay 1.0 --pattern '*baseline'
+
+# Custom case number for different MITRE releases
+REPO_MINDER_CASE_NUMBER=20-1234 repo-minder --repo saf
+```
+
+### Validation
+
+Settings are validated at startup:
+- `delay` must be between 0.0 and 5.0 seconds
+- `max_workers` must be between 1 and 50
+- Invalid values will show helpful error messages
 
 ## Usage
 
