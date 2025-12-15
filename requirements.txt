@@ -1,2 +1,0 @@
-# Runtime dependencies
-jinja2>=3.0.0  # Template engine for LICENSE generation
