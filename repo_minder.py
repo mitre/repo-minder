@@ -110,6 +110,9 @@ class Settings(BaseSettings):
     # Behavior Defaults
     skip_archived: bool = Field(default=False, description="Default: skip archived repositories")
     skip_forks: bool = Field(default=True, description="Default: skip forked repositories")
+    ai_assisted: bool = Field(
+        default=False, description="Include AI-assisted development disclosure in LICENSE"
+    )
 
     # Logging
     log_level: str = Field(
@@ -166,6 +169,7 @@ TEMPLATE_VARS = {
     "org_office": settings.org_office,
     "org_address": settings.org_address,
     "org_phone": settings.org_phone,
+    "ai_assisted": settings.ai_assisted,
 }
 
 
@@ -181,6 +185,7 @@ class RepoMinder:
         organization=None,
         team=None,
         max_workers=None,
+        ai_assisted=None,
     ):
         # Use provided values or fall back to global settings
         self.organization = organization or settings.organization
@@ -190,6 +195,7 @@ class RepoMinder:
         self.skip_archived = skip_archived if skip_archived is not None else settings.skip_archived
         self.delay = delay if delay is not None else settings.delay
         self.max_workers = max_workers if max_workers is not None else settings.max_workers
+        self.ai_assisted = ai_assisted if ai_assisted is not None else settings.ai_assisted
         self.quiet_mode = False  # Suppress per-repo messages in bulk operations
         self.stats = {
             "total": 0,
@@ -217,11 +223,22 @@ class RepoMinder:
             lstrip_blocks=True,
         )
 
+        # Build template vars with instance-specific ai_assisted value
+        template_vars = {
+            "year": settings.copyright_year,
+            "case_number": settings.case_number,
+            "organization": settings.copyright_org,
+            "org_office": settings.org_office,
+            "org_address": settings.org_address,
+            "org_phone": settings.org_phone,
+            "ai_assisted": self.ai_assisted,
+        }
+
         # Render each template type
         self.templates = {
-            "cis": env.get_template("cis.j2").render(**TEMPLATE_VARS),
-            "disa": env.get_template("disa.j2").render(**TEMPLATE_VARS),
-            "plain": env.get_template("plain.j2").render(**TEMPLATE_VARS),
+            "cis": env.get_template("cis.j2").render(**template_vars),
+            "disa": env.get_template("disa.j2").render(**template_vars),
+            "plain": env.get_template("plain.j2").render(**template_vars),
         }
 
     def get_saf_repos(self) -> List[str]:
@@ -1239,6 +1256,9 @@ def standardize(
         bool, typer.Option("--backup", help="Backup original LICENSE files before update")
     ] = True,
     no_color: Annotated[bool, typer.Option("--no-color", help="Disable colored output")] = False,
+    ai_assisted: Annotated[
+        bool, typer.Option("--ai-assisted", help="Include AI-assisted development disclosure")
+    ] = False,
 ):
     """Standardize LICENSE files in MITRE SAF repositories."""
     # Set NO_COLOR if requested
@@ -1363,6 +1383,7 @@ def standardize(
         skip_templates=skip or [],
         skip_archived=skip_archived,
         delay=delay,
+        ai_assisted=ai_assisted,
     )
     standardizer.output_format = output_format
     standardizer.output_file = output
