@@ -51,6 +51,24 @@ def plain_template(fixtures_dir):
 
 
 @pytest.fixture
+def plain_template_ai(fixtures_dir):
+    """Return plain template with AI disclosure content."""
+    return (fixtures_dir / "LICENSE_TEMPLATE_PLAIN_AI.md").read_text()
+
+
+@pytest.fixture
+def cis_template_ai(fixtures_dir):
+    """Return CIS template with AI disclosure content."""
+    return (fixtures_dir / "LICENSE_TEMPLATE_CIS_AI.md").read_text()
+
+
+@pytest.fixture
+def disa_template_ai(fixtures_dir):
+    """Return DISA template with AI disclosure content."""
+    return (fixtures_dir / "LICENSE_TEMPLATE_DISA_AI.md").read_text()
+
+
+@pytest.fixture
 def sample_repos():
     """Return sample repo names for testing."""
     return {
