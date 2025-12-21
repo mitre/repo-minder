@@ -50,6 +50,4 @@ class TestAIAssistedTemplates:
                 for i, line in enumerate(lines)
                 if len(line) > 80 and not line.strip().startswith("http")
             ]
-            assert (
-                len(long_lines) == 0
-            ), f"{name} template has lines > 80 chars at: {long_lines}"
+            assert len(long_lines) == 0, f"{name} template has lines > 80 chars at: {long_lines}"
